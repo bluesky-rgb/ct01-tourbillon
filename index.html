@@ -866,7 +866,7 @@ const Music={on:true,playing:false,buf:null,gain:null,timer:null,synth:false,
     try{g.gain.cancelScheduledValues(audio.currentTime);g.gain.setValueAtTime(g.gain.value,audio.currentTime);g.gain.linearRampToValueAtTime(0,audio.currentTime+2);setTimeout(()=>g.disconnect(),2300);}catch(e){}},
   duck(v){if(this.synth)return SynthMusic.duck(v);if(this.gain)this.gain.gain.setTargetAtTime(v?.22:.55,audio.currentTime,.35);}};
 // recorded narration (MiniMax). ids listed here have narration/<id>.mp3 published beside the page; others fall back to the browser voice
-const VO=new Set([]);let clip=null;
+const VO=new Set(['01','02','03','04','05','06','07','08','09','10','11a','11b','11c','12']);let clip=null;
 const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;
 let voiceOn=TTS||VO.size>0,speaking=false,zhVoice=null;
 function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/zh[-_]CN/i.test(v.lang)&&/Ting|Xiaoxiao|Yun|Google/i.test(v.name))||vs.find(v=>/zh[-_]CN/i.test(v.lang))||vs.find(v=>/^zh/i.test(v.lang))||null;}
@@ -998,8 +998,8 @@ const DEMO=[
   go(){const y=nextLeap();this.text=`再拨到 ${y} 年 2 月 28 日深夜。${y} 年是闰年，这块表知道下一天是 2 月 29 日，而不是 3 月 1 日。月份表盘里的小金针指向“闰”。`;quietJump(y,1,28);setSpeed(10);}},
  {d:12,ex:true,title:'把它拆开',text:'沿着中轴一层层拆开：表壳、表盘和指针、日历机构、陀飞轮、齿轮和发条、机芯底板。拆开的状态下，它依然在走。',
   go(){mt=nowSec();setSpeed(1);explodeTarget=1;syncExplode();markView('');goView('side',2.4);controls.autoRotate=!reduceMotion;controls.autoRotateSpeed=1.2;}},
- {d:17,ex:true,title:'一层一层看',text:'',
-  go(){controls.autoRotate=false;},tick(tt){const i=Math.min(2,Math.floor(tt/5.5)),l=[2,3,4][i];if(focus!==l){setFocus(l);setDemoText(['日历机构：负责日期、星期、月份、闰年和月相，每天午夜被拨动一次。','陀飞轮：内外两层框架，带着摆轮一边转一边翻滚。','齿轮和发条：动力从发条出发，经过这些齿轮传到每一根指针。'][i],true,'11'+'abc'[i]);}}},
+ {d:22,ex:true,title:'一层一层看',text:'',
+  go(){controls.autoRotate=false;},tick(tt){const i=tt<8.2?0:tt<14.4?1:2,l=[2,3,4][i];if(focus!==l){setFocus(l);setDemoText(['日历机构：负责日期、星期、月份、闰年和月相，每天午夜被拨动一次。','陀飞轮：内外两层框架，带着摆轮一边转一边翻滚。','齿轮和发条：动力从发条出发，经过这些齿轮传到每一根指针。'][i],true,'11'+'abc'[i]);}}},
  {d:9,title:'重新组装',text:'回到现在的时间。接下来你可以自己拖动、缩放，在“定制这块表”里换颜色，或点任何零件看它是什么。',
   go(){setFocus(null);explodeTarget=0;syncExplode();setSpeed(1);mt=nowSec();setAuto(false);markView('show');goView('show',2.6);}}
 ];
