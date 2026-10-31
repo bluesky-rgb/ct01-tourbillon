@@ -134,6 +134,7 @@ h1 em{font-style:normal;color:var(--accent)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 <script>
 requestAnimationFrame(()=>setTimeout(function(){
 if(!window.THREE||!THREE.OrbitControls){document.body.insertAdjacentHTML('beforeend','<div id="err">3D 引擎没有加载成功，请刷新页面重试。</div>');return;}
@@ -317,18 +318,36 @@ makePlane({id:3,name:'右侧客机 · 窄体标准型',nose:[1124,348],tail:[114
 function roofCanvas(){const c=cvs(256,64),x=c.getContext('2d');x.fillStyle='#dcdedf';x.fillRect(0,0,256,64);x.fillStyle='rgba(90,95,100,.35)';for(let i=0;i<256;i+=10)x.fillRect(i,0,2,64);x.fillStyle='rgba(255,255,255,.6)';x.fillRect(0,4,256,3);x.fillRect(0,57,256,3);return c;}
 const roofT=tex(roofCanvas());roofT.wrapS=THREE.RepeatWrapping;
 const bridges=[];
+function ribCanvas(){const c=cvs(256,64),x=c.getContext('2d');x.fillStyle='#c4c9cc';x.fillRect(0,0,256,64);for(let i=0;i<256;i+=6){x.fillStyle=i%12?'rgba(255,255,255,.45)':'rgba(70,76,82,.35)';x.fillRect(i,0,2,64);}return c;}
+const ribT=tex(ribCanvas());ribT.wrapS=ribT.wrapT=THREE.RepeatWrapping;
 function bridge(R,C,name){const g=new THREE.Group();LG[4].add(g);const a=W(...R),b=W(...C),dir=b.clone().sub(a),L=dir.length();dir.normalize();const ang=Math.atan2(dir.x,dir.z);
-  const rot=mesh(new THREE.CylinderGeometry(2.6,2.6,6.4,28),4,'glass',{color:0x9fb6b4,roughness:.15,metalness:.4},`${name} · 旋转平台`,g);rot.position.copy(a).setY(3.2);
-  const cap=mesh(new THREE.CylinderGeometry(2.9,2.9,.4,28),4,'white',{color:0xeeeeec,roughness:.6},`${name} · 旋转平台`,g);cap.position.copy(a).setY(6.6);
-  const tube=(f0,f1,w,h,y,nm)=>{const len=(f1-f0)*L,geo=new THREE.BoxGeometry(w,h,len);const t=roofT.clone();t.needsUpdate=true;t.repeat.set(len/8,1);
-    const mats=[M(4,'side',{color:0xb9bfc2,roughness:.35,metalness:.3}),M(4,'side'),new THREE.MeshStandardMaterial({map:t,roughness:.6}),M(4,'side'),M(4,'side'),M(4,'side')];layerMats[4].push(mats[2]);
-    const m=new THREE.Mesh(geo,mats);m.castShadow=m.receiveShadow=true;m.userData={layer:4,name:`${name} · ${nm}`};m.position.copy(a).addScaledVector(dir,(f0+f1)/2*L).setY(y);m.rotation.y=ang;g.add(m);return m;};
+  const sideM=M(4,'side',{color:0xb9bfc2,roughness:.35,metalness:.35}),glassM=M(4,'bglass',{color:0x22303a,roughness:.08,metalness:.6}),whiteM=M(4,'white',{color:0xeeeeec,roughness:.55}),legM=M(4,'leg',{color:0x6d7276,roughness:.45,metalness:.5}),tyreM=M(4,'btyre',{color:0x161718,roughness:.9});
+  const tag=(m,nm)=>{m.castShadow=m.receiveShadow=true;m.userData={layer:4,name:`${name} · ${nm}`};return m;};
+  // rotunda: glazed drum on a column
+  const col=tag(new THREE.Mesh(new THREE.CylinderGeometry(.9,1.1,3.2,16),legM),'旋转平台');col.position.copy(a).setY(1.6);g.add(col);
+  const drum=tag(new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,3.4,32),M(4,'glass',{color:0x8fb3b0,roughness:.1,metalness:.5})),'旋转平台');drum.position.copy(a).setY(4.9);g.add(drum);
+  for(let i=0;i<16;i++){const th=i/16*TAU,m=tag(new THREE.Mesh(new THREE.BoxGeometry(.12,3.4,.12),whiteM),'旋转平台');m.position.copy(a).add(new V(Math.cos(th)*2.62,4.9,Math.sin(th)*2.62));g.add(m);}
+  const cap=tag(new THREE.Mesh(new THREE.CylinderGeometry(2.95,2.95,.45,32),whiteM),'旋转平台');cap.position.copy(a).setY(6.8);g.add(cap);
+  // telescopic tunnels: ribbed steel skin, glazing band, rounded roof
+  const tube=(f0,f1,w,h,y,nm)=>{const len=(f1-f0)*L,grp=new THREE.Group();grp.position.copy(a).addScaledVector(dir,(f0+f1)/2*L).setY(y);grp.rotation.y=ang;g.add(grp);
+    const t=ribT.clone();t.needsUpdate=true;t.repeat.set(len/1.6,1);const rib=new THREE.MeshStandardMaterial({map:t,roughness:.45,metalness:.35});rib.userData={};layerMats[4].push(rib);
+    const sh=new THREE.Shape(),r=.35;sh.moveTo(-w/2,-h/2);sh.lineTo(w/2,-h/2);sh.lineTo(w/2,h/2-r);sh.quadraticCurveTo(w/2,h/2,w/2-r,h/2);sh.lineTo(-w/2+r,h/2);sh.quadraticCurveTo(-w/2,h/2,-w/2,h/2-r);sh.lineTo(-w/2,-h/2);
+    const geo=new THREE.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false,curveSegments:4});geo.translate(0,0,-len/2);
+    grp.add(tag(new THREE.Mesh(geo,rib),nm));
+    for(const s of [-1,1]){const gl=tag(new THREE.Mesh(new THREE.BoxGeometry(.04,.75,len*.94),glassM),nm);gl.position.set(s*(w/2+.01),.35,0);grp.add(gl);}
+    const fl=tag(new THREE.Mesh(new THREE.BoxGeometry(w*.96,.18,len),legM),nm);fl.position.y=-h/2-.08;grp.add(fl);return grp;};
   const t1=tube(.06,.56,3.5,3.0,4.7,'固定通道'),t2=tube(.5,.95,3.0,2.7,4.6,'伸缩通道');
-  const cab=mesh(new THREE.BoxGeometry(4.2,3.1,3.4),4,'white',{},`${name} · 舱门对接口`,g);cab.position.copy(b).setY(4.6);cab.rotation.y=ang+.25;
-  // drive column with wheel bogie
-  const dp=a.clone().addScaledVector(dir,.8*L);
-  for(const s of [-1,1]){const leg=mesh(new THREE.BoxGeometry(.35,3.4,.35),4,'leg',{color:0x6d7276,roughness:.5,metalness:.4},`${name} · 行走支柱`,g);leg.position.copy(dp).add(new V(Math.cos(ang)*s*1.1,1.7,-Math.sin(ang)*s*1.1));}
-  const bog=mesh(new THREE.BoxGeometry(3.4,.8,1.4),4,'bogie',{color:0x2e3135,roughness:.7},`${name} · 驱动轮组`,g);bog.position.copy(dp).setY(.45);bog.rotation.y=ang;
+  // cab with folding canopy (bellows) that seals against the door
+  const cab=new THREE.Group();cab.position.copy(b).setY(4.6);cab.rotation.y=ang+.25;g.add(cab);
+  const cb=tag(new THREE.Mesh(new THREE.BoxGeometry(4.0,3.0,3.0),whiteM),'舱门对接口');cab.add(cb);
+  for(const s of [-1,1]){const w=tag(new THREE.Mesh(new THREE.BoxGeometry(.04,.9,2.2),glassM),'舱门对接口');w.position.set(s*2.01,.4,0);cab.add(w);}
+  for(let i=0;i<5;i++){const f=tag(new THREE.Mesh(new THREE.BoxGeometry(3.3-i*.08,2.7-i*.06,.18),M(4,'bellows',{color:0x2b2d30,roughness:.85})),'遮篷 · 折叠式');f.position.z=1.6+i*.2;cab.add(f);}
+  // drive column with two big tyres
+  const dp=a.clone().addScaledVector(dir,.8*L);const drv=new THREE.Group();drv.position.copy(dp);drv.rotation.y=ang;g.add(drv);
+  for(const s of [-1,1]){const leg=tag(new THREE.Mesh(new THREE.BoxGeometry(.32,3.2,.32),legM),'升降立柱');leg.position.set(s*1.0,1.9,0);drv.add(leg);
+    const ty=new THREE.CylinderGeometry(.55,.55,.45,20);ty.rotateZ(PI/2);const t=tag(new THREE.Mesh(ty,tyreM),'驱动轮组');t.position.set(s*1.15,.55,0);drv.add(t);}
+  const ax=tag(new THREE.Mesh(new THREE.BoxGeometry(2.6,.45,.6),legM),'驱动轮组');ax.position.y=.7;drv.add(ax);
+  const ctl=tag(new THREE.Mesh(new THREE.BoxGeometry(1.0,.8,.7),M(4,'ctl',{color:0xf0b91d,roughness:.5})),'驱动控制箱');ctl.position.set(0,1.3,.5);drv.add(ctl);
   bridges.push({g,t2,cab,a,dir,L,base2:t2.position.clone(),baseCab:cab.position.clone()});return g;}
 bridge([12,208],[226,357],'1 号登机桥');
 bridge([420,210],[662,378],'2 号登机桥');
@@ -336,18 +355,31 @@ bridge([957,206],[1098,386],'3 号登机桥');
 bridge([1322,208],[1428,312],'4 号登机桥');
 
 /* ================= terminal piers, corridors, masts (layer 5) ================= */
-function facadeCanvas(){const c=cvs(256,128),x=c.getContext('2d');x.fillStyle='#f1f0ec';x.fillRect(0,0,256,128);x.fillStyle='#8ea3a6';
-  for(let i=6;i<256;i+=16)for(let j=14;j<120;j+=30)x.fillRect(i,j,11,20);return c;}
+function facadeCanvas(){const c=cvs(256,256),x=c.getContext('2d');x.fillStyle='#eeede9';x.fillRect(0,0,256,256);
+  for(let f=0;f<2;f++){const y0=24+f*120;const gr=x.createLinearGradient(0,y0,0,y0+84);gr.addColorStop(0,'#5f7b80');gr.addColorStop(1,'#8fa9ab');x.fillStyle=gr;x.fillRect(0,y0,256,84);
+    x.fillStyle='#d9dcdc';for(let i=0;i<256;i+=21)x.fillRect(i,y0,3,84);x.fillRect(0,y0+40,256,2);}
+  x.fillStyle='rgba(0,0,0,.06)';x.fillRect(0,108,256,16);x.fillRect(0,228,256,16);return c;}
 const facT=tex(facadeCanvas());facT.wrapS=facT.wrapT=THREE.RepeatWrapping;
 const winMats=[];
 function block(x0,y0,x1,y1,h,name,col){const a=W(x0,y0),b=W(x1,y1),w=b.x-a.x,d=b.z-a.z;const t=facT.clone();t.needsUpdate=true;t.repeat.set(Math.max(1,w/8),Math.max(1,h/8));
   const side=new THREE.MeshStandardMaterial({map:t,roughness:.55,emissive:0x000000,emissiveMap:null});layerMats[5].push(side);winMats.push(side);
   const top=M(5,'roof'+(col||''),{color:col||0xf2f1ed,roughness:.7});
-  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),[side,side,top,top,side,side]);m.position.set((a.x+b.x)/2,h/2,(a.z+b.z)/2);m.castShadow=m.receiveShadow=true;m.userData={layer:5,name};LG[5].add(m);return m;}
-function rooftop(cx,cy,w,d,h){const m=mesh(new THREE.BoxGeometry(w/10,h,d/10),5,'hvac',{color:0xc9cbcc,roughness:.6},'屋顶设备');const p=W(cx,cy);m.position.set(p.x,0,p.z);return m;}
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),[side,side,top,top,side,side]);m.position.set((a.x+b.x)/2,h/2,(a.z+b.z)/2);m.castShadow=m.receiveShadow=true;m.userData={layer:5,name};LG[5].add(m);
+  // parapet, roof edge band and a ground-floor plinth
+  const par=M(5,'parapet',{color:0xdcdcd8,roughness:.6});
+  [[w+.3,.9,.3,0,h+.45,-d/2],[w+.3,.9,.3,0,h+.45,d/2],[.3,.9,d,-w/2,h+.45,0],[.3,.9,d,w/2,h+.45,0]].forEach(([x,y,z,px,py,pz])=>{const e=new THREE.Mesh(new THREE.BoxGeometry(x,y,z),par);e.position.set(m.position.x+px,py,m.position.z+pz);e.castShadow=true;e.userData={layer:5,name};LG[5].add(e);});
+  const pl=new THREE.Mesh(new THREE.BoxGeometry(w+.2,1.2,d+.2),M(5,'plinth',{color:0x8f9295,roughness:.7}));pl.position.set(m.position.x,.6,m.position.z);pl.userData={layer:5,name};LG[5].add(pl);
+  // skylight strip along the roof
+  const sk=new THREE.Mesh(new THREE.BoxGeometry(Math.min(w,d)*.18,.25,Math.max(w,d)*.7),M(5,'sky',{color:0x6f8f96,roughness:.1,metalness:.5}));if(w>d)sk.rotation.y=PI/2;sk.position.set(m.position.x,h+.12,m.position.z);sk.userData={layer:5,name:name+' · 采光天窗'};LG[5].add(sk);
+  return m;}
+function rooftop(cx,cy,w,d,h){const g=new THREE.Group(),p=W(cx,cy),W_=w/10,D=d/10;g.position.set(p.x,0,p.z);LG[5].add(g);
+  const body=mesh(new THREE.BoxGeometry(W_,h,D),5,'hvac',{color:0xc9cbcc,roughness:.55,metalness:.3},'屋顶空调机组',g);
+  const n=Math.max(1,Math.round(W_/1.4));for(let i=0;i<n;i++){const f=mesh(new THREE.CylinderGeometry(.5,.5,.12,18),5,'fanGrille',{color:0x4c5156,roughness:.6,metalness:.4},'屋顶空调机组 · 排风扇',g);f.position.set(-W_/2+(i+.5)*W_/n,h/2+.06,-D*.2);}
+  for(let u=-W_/2+.15;u<W_/2;u+=.22){const l=mesh(new THREE.BoxGeometry(.05,h*.6,.02),5,'louver',{color:0x8a8f94,roughness:.6},'屋顶空调机组',g);l.position.set(u,0,D/2+.01);}
+  return g;}
 const PIERS=[[0,0,138,205,12,'左侧候机指廊'],[345,-10,500,226,12.5,'2 号机位候机指廊'],[885,-10,1040,226,12.5,'3 号机位候机指廊'],[1278,-10,1420,222,12,'右侧候机指廊']];
 PIERS.forEach(([x0,y0,x1,y1,h,n])=>{block(x0,y0,x1,y1,h,n);
-  for(let i=0;i<3;i++){const r=rooftop(x0+20+rnd()*(x1-x0-40),y0+30+rnd()*(y1-y0-60),18+rnd()*14,12+rnd()*10,1.2);r.position.y=h+.6;}});
+  for(let i=0;i<3;i++){const r=rooftop(x0+18+(i+.5)*(x1-x0-36)/3,y0+40+rnd()*(y1-y0-90),20+rnd()*10,14+rnd()*6,1.3);r.position.y=h+.65;}});
 block(290,40,345,182,8,'服务楼',0xcfd1d2);
 // glass stair towers and rotundas on each pier
 [[64,92,122,150],[452,88,500,150],[1004,94,1042,146],[1348,94,1396,146]].forEach(([x0,y0,x1,y1])=>{const a=W(x0,y0),b=W(x1,y1);
@@ -361,40 +393,119 @@ const masts=[];
 
 /* ================= ground vehicles (layer 2) ================= */
 const VEH=[];
-function veh(px,py,lw,lh,rot,col,type,name){const g=new THREE.Group(),Lx=lw/10,Lz=lh/10,p=W(px,py);g.position.copy(p);g.rotation.y=-rot*D2R;LG[2].add(g);
-  const C=M(2,'c'+col,{color:col,roughness:.5,metalness:.15}),dark=M(2,'dark',{color:0x26292d,roughness:.6}),glass=M(2,'glass',{color:0x2d3b47,roughness:.15,metalness:.4});
-  const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;m.userData={layer:2,name};g.add(m);return m;};
-  if(type==='car'){add(new THREE.BoxGeometry(Lx,.75,Lz),C,0,.55,0);add(new THREE.BoxGeometry(Lx*.86,.6,Lz*.5),glass,0,1.2,.05*Lz);add(new THREE.BoxGeometry(Lx*.8,.08,Lz*.42),C,0,1.52,.05*Lz);}
-  else if(type==='van'){add(new THREE.BoxGeometry(Lx,1.7,Lz),C,0,1.05,0);add(new THREE.BoxGeometry(Lx*.9,.5,.08),glass,0,1.4,-Lz/2-.02);}
-  else if(type==='truck'){add(new THREE.BoxGeometry(Lx,1.3,Lz*.28),C,0,.9,-Lz*.36);add(new THREE.BoxGeometry(Lx*.95,.45,.08),glass,0,1.3,-Lz*.5);add(new THREE.BoxGeometry(Lx,2.6,Lz*.68),M(2,'box',{color:0xf1f1ee,roughness:.6}),0,1.75,Lz*.15);}
-  else if(type==='loader'){add(new THREE.BoxGeometry(Lx,.7,Lz),C,0,.5,0);add(new THREE.BoxGeometry(Lx*.6,.7,Lz*.18),glass,0,1.1,Lz*.36);const belt=new THREE.Group();belt.position.set(0,1.2,-Lz*.05);g.add(belt);
-    const bm=new THREE.Mesh(new THREE.BoxGeometry(Lx*.55,.22,Lz*.95),dark);bm.castShadow=true;bm.userData={layer:2,name};belt.add(bm);[-1,1].forEach(s=>{const rl=new THREE.Mesh(new THREE.BoxGeometry(.08,.35,Lz*.95),C);rl.position.x=s*Lx*.3;rl.userData={layer:2,name};belt.add(rl);});
-    belt.rotation.x=-.32;g.userData.belt=belt;}
-  else if(type==='catering'){add(new THREE.BoxGeometry(Lx,.6,Lz),dark,0,.55,0);add(new THREE.BoxGeometry(Lx,1.4,Lz*.22),C,0,1.4,-Lz*.39);add(new THREE.BoxGeometry(Lx*.95,.5,.08),glass,0,1.65,-Lz*.5);
-    const sc=add(new THREE.BoxGeometry(Lx*.7,1,Lz*.55),M(2,'scissor',{color:0x8a8f94,roughness:.5,metalness:.6,wireframe:false}),0,.85+.5,Lz*.12);sc.scale.y=.2;g.userData.sc=sc;
-    const box=add(new THREE.BoxGeometry(Lx,2.5,Lz*.7),M(2,'catBox',{color:0xf4f4f1,roughness:.55}),0,2.25,Lz*.12);g.userData.box=box;g.userData.boxY=2.25;
-    add(new THREE.BoxGeometry(Lx*.9,.08,Lz*.08),M(2,'stripe',{color:0xd8463b}),0,3.0,Lz*.12-Lz*.35);}
-  else if(type==='fuel'){add(new THREE.BoxGeometry(Lx,.5,Lz),dark,0,.55,0);add(new THREE.BoxGeometry(Lx,1.5,Lz*.2),C,0,1.4,-Lz*.4);add(new THREE.BoxGeometry(Lx*.95,.5,.08),glass,0,1.7,-Lz*.5);
-    const tk=new THREE.CylinderGeometry(Lx*.5,Lx*.5,Lz*.72,20);tk.rotateX(PI/2);add(tk,C,0,1.75,Lz*.12);add(new THREE.BoxGeometry(Lx*1.02,.18,Lz*.72),M(2,'fuelStripe',{color:0xd8463b}),0,1.4,Lz*.12);}
-  else if(type==='cart'){add(new THREE.BoxGeometry(Lx,.35,Lz),dark,0,.35,0);add(new THREE.BoxGeometry(Lx*.94,1.3,Lz*.9),C,0,1.2,0);}
-  else if(type==='dolly'){add(new THREE.BoxGeometry(Lx,.4,Lz),C,0,.4,0);}
-  else if(type==='tug'){add(new THREE.BoxGeometry(Lx,.9,Lz),C,0,.65,0);add(new THREE.BoxGeometry(Lx*.8,.8,Lz*.3),glass,0,1.5,Lz*.25);}
-  else if(type==='box'){add(new THREE.BoxGeometry(Lx,1.8,Lz),C,0,.9,0);}
-  else if(type==='gpu'){add(new THREE.BoxGeometry(Lx,1.0,Lz),C,0,.7,0);add(new THREE.BoxGeometry(Lx*.18,.6,Lz),dark,Lx*.36,1.35,0);}
-  else if(type==='cone'){add(new THREE.ConeGeometry(.22,.7,10),C,0,.35,0);}
+function veh(px,py,lw,lh,rot,col,type,name){const g=new THREE.Group();let Lx=lw/10,Lz=lh/10,p=W(px,py);g.position.copy(p);
+  // footprints measured sideways in the photo: model along the long side
+  let yaw=-rot*D2R;if(type!=='cone'&&Lx>Lz*1.15){[Lx,Lz]=[Lz,Lx];yaw+=PI/2;}g.rotation.y=yaw;LG[2].add(g);
+  const C=M(2,'c'+col,{color:col,roughness:.42,metalness:.2}),dark=M(2,'dark',{color:0x26292d,roughness:.6}),glass=M(2,'glass',{color:0x1d2731,roughness:.08,metalness:.6}),
+        tyre=M(2,'tyre',{color:0x151617,roughness:.9}),hub=M(2,'hub',{color:0xa9aeb3,roughness:.35,metalness:.8}),steel=M(2,'steel2',{color:0x8c9196,roughness:.4,metalness:.7}),
+        lamp=M(2,'lamp',{color:0xfff6dc,emissive:0xfff2c8,emissiveIntensity:.4}),amber=M(2,'amber',{color:0xff9a1f,emissive:0xff8a00,emissiveIntensity:.6}),white=M(2,'w2',{color:0xf1f1ee,roughness:.5});
+  const tag=m=>{m.castShadow=m.receiveShadow=true;m.userData={layer:2,name};return m;};
+  const add=(geo,mat,x,y,z)=>{const m=tag(new THREE.Mesh(geo,mat));m.position.set(x,y,z);g.add(m);return m;};
+  // side profile (u = along length, front at -Lz/2) extruded across the width
+  const prof=(pts,w,mat,bev=.06,x=0)=>{const s=new THREE.Shape();pts.forEach(([u,y],i)=>i?s.lineTo(u,y):s.moveTo(u,y));
+    const geo=new THREE.ExtrudeGeometry(s,{depth:Math.max(.02,w-2*bev),bevelEnabled:bev>0,bevelThickness:bev,bevelSize:bev,bevelSegments:2,curveSegments:6});geo.translate(0,0,-(w-2*bev)/2);geo.rotateY(-PI/2);return add(geo,mat,x,0,0);};
+  const wheel=(x,z,r,w=.24)=>{const t=new THREE.CylinderGeometry(r,r,w,18);t.rotateZ(PI/2);add(t,tyre,x,r,z);const h=new THREE.CylinderGeometry(r*.55,r*.55,w+.02,12);h.rotateZ(PI/2);add(h,hub,x,r,z);};
+  const axle=(z,r,w=.24,ins=0)=>{for(const s of [-1,1])wheel(s*(Lx/2-w/2-ins),z,r,w);};
+  const lights=(zf)=>{for(const s of [-1,1]){add(new THREE.BoxGeometry(.16,.1,.04),lamp,s*(Lx/2-.18),.72,zf-.01);}};
+  const beacon=y=>add(new THREE.CylinderGeometry(.09,.11,.16,10),amber,0,y,0);
+  const L=Lz,H=L/2;
+  if(type==='car'){
+    prof([[-H,.28],[-H,.62],[-H+.16*L,.74],[-.14*L,.78],[.3*L,.8],[H,.74],[H,.28]],Lx,C,.08);
+    prof([[-.16*L,.78],[-.02*L,1.22],[.24*L,1.22],[.36*L,.8]],Lx*.84,glass,.04);
+    prof([[-.02*L,1.2],[.24*L,1.2],[.24*L,1.27],[-.02*L,1.27]],Lx*.8,C,.03);
+    axle(-.31*L,.3);axle(.31*L,.3);lights(-H);}
+  else if(type==='van'){const long=L>6;
+    prof([[-H,.32],[-H,1.05],[-H+.12*L,1.75],[H,1.9],[H,.32]],Lx,C,.09);
+    prof([[-H+.02*L,1.05],[-H+.12*L,1.68],[-H+.24*L,1.7],[-H+.24*L,1.08]],Lx*1.005,glass,0);
+    if(long){for(let u=-H+.3*L;u<H-.6;u+=1.6)prof([[u,1.05],[u,1.7],[u+1.3,1.72],[u+1.3,1.05]],Lx*1.005,glass,0);
+      prof([[-H+.3*L,.3],[-H+.3*L,1.0],[-H+.3*L+.9,1.0],[-H+.3*L+.9,.3]],Lx*1.01,glass,0);}
+    else prof([[-H+.28*L,1.08],[-H+.28*L,1.68],[H-.08*L,1.75],[H-.08*L,1.08]],Lx*1.005,glass,0);
+    axle(-.3*L,.34);axle(.32*L,.34);lights(-H);if(!long)beacon(1.98);}
+  else if(type==='gpu'){ // trailer-mounted 400 Hz ground power unit
+    add(new THREE.BoxGeometry(Lx*.9,.18,L*.92),dark,0,.42,0);
+    prof([[-H*.9,.5],[-H*.9,1.42],[-H*.8,1.55],[H*.8,1.55],[H*.9,1.42],[H*.9,.5]],Lx,C,.08);
+    for(let u=-.35*L;u<.3*L;u+=.2)for(const s of [-1,1])add(new THREE.BoxGeometry(.02,.5,.1),dark,s*(Lx/2+.01),1.05,u);
+    const reel=new THREE.CylinderGeometry(.32,.32,.4,16);reel.rotateZ(PI/2);add(reel,dark,0,1.85,.25*L);add(new THREE.CylinderGeometry(.06,.06,.3,8),steel,0,1.65,.25*L);
+    add(new THREE.BoxGeometry(.08,.08,1.3),steel,0,.42,-H-.55);axle(-.3*L,.3,.2,.05);axle(.3*L,.3,.2,.05);}
+  else if(type==='loader'){ // belt loader: low chassis, offset cab, belt frame on a raising boom
+    prof([[-H,.35],[-H,.75],[H,.75],[H,.35]],Lx,C,.05);
+    const cabX=Lx*.25;prof([[.16*L,.75],[.16*L,1.75],[.42*L,1.75],[.44*L,.75]],Lx*.42,C,.04,cabX);
+    prof([[.18*L,1.0],[.18*L,1.65],[.4*L,1.65],[.41*L,1.0]],Lx*.43,glass,0,cabX);
+    const belt=new THREE.Group();belt.position.set(-Lx*.12,1.0,-.04*L);g.add(belt);
+    const bw=Lx*.55,bl=L*.98;
+    const bm=tag(new THREE.Mesh(new THREE.BoxGeometry(bw,.12,bl),M(2,'beltRub',{color:0x2a2b2d,roughness:.95})));belt.add(bm);
+    for(const s of [-1,1]){const rl=tag(new THREE.Mesh(new THREE.BoxGeometry(.07,.28,bl),C));rl.position.set(s*(bw/2+.04),.08,0);belt.add(rl);
+      for(let u=-bl/2+.3;u<bl/2;u+=.7){const post=tag(new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.5,6),steel));post.position.set(s*(bw/2+.04),.4,u);belt.add(post);}
+      const hr=tag(new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,bl*.9,6),steel));hr.rotation.x=PI/2;hr.position.set(s*(bw/2+.04),.65,0);belt.add(hr);}
+    for(let u=-bl/2+.1;u<bl/2;u+=.35){const rl=tag(new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,bw*.98,8),steel));rl.rotation.z=PI/2;rl.position.set(0,.07,u);belt.add(rl);}
+    belt.rotation.x=-.32;g.userData.belt=belt;axle(-.33*L,.28,.22);axle(.33*L,.28,.22);beacon(1.85);}
+  else if(type==='cart'){ // covered baggage cart: flatbed, corner posts, curved canvas roof, half-open curtains
+    add(new THREE.BoxGeometry(Lx,.12,L),steel,0,.5,0);
+    for(const sx of [-1,1])for(const sz of [-1,1])add(new THREE.CylinderGeometry(.035,.035,1.25,6),steel,sx*(Lx/2-.05),1.15,sz*(H-.05));
+    const rf=new THREE.CylinderGeometry(Lx*.62,Lx*.62,L*.98,18,1,true,-0.95,1.9);rf.rotateX(-PI/2);const roof=add(rf,C,0,1.78-Lx*.62*Math.cos(.95)+.02,0);roof.material=C;
+    for(const s of [-1,1]){add(new THREE.BoxGeometry(.03,.9,L*.42),C,s*(Lx/2-.02),1.3,s*L*.25);}
+    add(new THREE.BoxGeometry(.06,.06,.7),steel,0,.45,-H-.35);axle(-.32*L,.2,.14,.04);axle(.32*L,.2,.14,.04);}
+  else if(type==='dolly'){ // container dolly with roller bed and an LD3 container
+    add(new THREE.BoxGeometry(Lx,.14,L),steel,0,.45,0);for(let u=-H+.2;u<H;u+=.3){const r=new THREE.CylinderGeometry(.04,.04,Lx*.9,6);r.rotateZ(PI/2);add(r,dark,0,.56,u);}
+    axle(-.32*L,.2,.14,.04);axle(.32*L,.2,.14,.04);add(new THREE.BoxGeometry(.06,.06,.7),steel,0,.42,-H-.35);}
+  else if(type==='uld'){ // LD3 unit load device: angled lower corner on one side
+    const s=new THREE.Shape(),w=Lx,h=1.6;s.moveTo(-w/2,0);s.lineTo(w/2-.45,0);s.lineTo(w/2,.55);s.lineTo(w/2,h);s.lineTo(-w/2,h);s.lineTo(-w/2,0);
+    const geo=new THREE.ExtrudeGeometry(s,{depth:L-.06,bevelEnabled:true,bevelThickness:.03,bevelSize:.03,bevelSegments:1});geo.translate(0,0,-(L-.06)/2);add(geo,M(2,'uld',{color:0xb7bcc1,roughness:.35,metalness:.75}),0,.05,0);
+    add(new THREE.BoxGeometry(w*.7,.9,.02),C,-.1,.85,-L/2-.02);}
+  else if(type==='tug'){const big=L>3.6;
+    if(big){ // pushback tractor: long low wedge with a side cab
+      prof([[-H,.35],[-H,.7],[-H+.15*L,1.0],[H-.1*L,1.1],[H,.9],[H,.35]],Lx,C,.08);
+      prof([[-.05*L,1.05],[-.02*L,2.0],[.28*L,2.0],[.3*L,1.05]],Lx*.36,glass,.02,Lx*.26);prof([[-.03*L,1.98],[.29*L,1.98],[.29*L,2.08],[-.03*L,2.08]],Lx*.4,C,.02,Lx*.26);
+      add(new THREE.BoxGeometry(Lx*.5,.14,.5),dark,0,.6,-H-.1);axle(-.3*L,.55,.42);axle(.3*L,.55,.42);beacon(2.18);}
+    else{ // baggage tractor: open seat under a roll-cage roof
+      prof([[-H,.3],[-H,.85],[-.15*L,.95],[H,.95],[H,.3]],Lx,C,.06);
+      for(const sx of [-1,1])for(const sz of [-.05,.42])add(new THREE.CylinderGeometry(.03,.03,.9,6),steel,sx*(Lx/2-.08),1.4,sz*L);
+      add(new THREE.BoxGeometry(Lx,.06,L*.55),C,0,1.86,.18*L);add(new THREE.BoxGeometry(Lx*.5,.4,.3),dark,0,1.15,.25*L);
+      axle(-.3*L,.28,.2);axle(.32*L,.28,.2);beacon(1.97);}}
+  else if(type==='truck'){ // box truck
+    prof([[-H,.4],[-H,1.25],[-H+.08*L,1.95],[-H+.26*L,2.0],[-H+.26*L,.4]],Lx,C,.08);
+    prof([[-H+.01*L,1.3],[-H+.08*L,1.9],[-H+.2*L,1.92],[-H+.2*L,1.3]],Lx*1.005,glass,0);
+    add(new THREE.BoxGeometry(Lx*.98,2.5,L*.7),white,0,1.85,.13*L);add(new THREE.BoxGeometry(Lx*.9,.24,L*.98),dark,0,.42,0);
+    axle(-.34*L,.38,.3);axle(.3*L,.38,.3);lights(-H);}
+  else if(type==='catering'){ // cab, scissor lift, insulated body with front platform and rails
+    add(new THREE.BoxGeometry(Lx*.9,.26,L*.98),dark,0,.48,0);
+    prof([[-H,.55],[-H,1.3],[-H+.06*L,1.95],[-H+.2*L,2.0],[-H+.2*L,.55]],Lx,C,.08);
+    prof([[-H+.01*L,1.32],[-H+.06*L,1.9],[-H+.16*L,1.92],[-H+.16*L,1.32]],Lx*1.005,glass,0);
+    const sc=new THREE.Group();sc.position.set(0,.65,.12*L);g.add(sc);
+    for(const s of [-1,1])for(const d of [-1,1]){const b=tag(new THREE.Mesh(new THREE.BoxGeometry(.1,.1,L*.58),steel));b.rotation.x=d*.12;b.position.set(s*Lx*.35,.5,0);sc.add(b);}
+    sc.scale.y=.2;g.userData.sc=sc;
+    const box=new THREE.Group();box.position.set(0,2.25,.12*L);g.add(box);
+    const bb=tag(new THREE.Mesh(new THREE.BoxGeometry(Lx,2.4,L*.7),white));box.add(bb);
+    const st=tag(new THREE.Mesh(new THREE.BoxGeometry(Lx*1.01,.12,L*.7),M(2,'stripe',{color:0xd8463b})));st.position.y=.75;box.add(st);
+    const pf=tag(new THREE.Mesh(new THREE.BoxGeometry(Lx,.1,.9),steel));pf.position.set(0,1.15,-L*.35-.45);box.add(pf);
+    for(const s of [-1,1]){const r=tag(new THREE.Mesh(new THREE.BoxGeometry(.04,.5,.9),steel));r.position.set(s*Lx/2,1.4,-L*.35-.45);box.add(r);}
+    g.userData.box=box;g.userData.boxY=2.25;axle(-.34*L,.38,.3);axle(.32*L,.38,.3);lights(-H);beacon(2.1);}
+  else if(type==='fuel'){ // refueller: cab, elliptic tank, hose reel and ladder
+    add(new THREE.BoxGeometry(Lx*.9,.26,L*.98),dark,0,.5,0);
+    prof([[-H,.55],[-H,1.3],[-H+.06*L,1.95],[-H+.2*L,2.0],[-H+.2*L,.55]],Lx,C,.08);
+    prof([[-H+.01*L,1.32],[-H+.06*L,1.9],[-H+.16*L,1.92],[-H+.16*L,1.32]],Lx*1.005,glass,0);
+    const tk=new THREE.CylinderGeometry(1,1,L*.68,28);tk.rotateX(PI/2);const tank=add(tk,C,0,1.7,.13*L);tank.scale.set(Lx*.5,.62,1);
+    for(const u of [-.15,.13,.41])add(new THREE.TorusGeometry(1,.035,6,28),steel,0,1.7,u*L).scale.set(Lx*.51,.63,1);
+    add(new THREE.BoxGeometry(Lx*1.01,.1,L*.66),M(2,'fuelStripe',{color:0xd8463b}),0,1.38,.13*L);
+    const reel=new THREE.CylinderGeometry(.42,.42,.5,16);reel.rotateZ(PI/2);add(reel,dark,Lx*.32,1.0,H-.6);
+    axle(-.34*L,.4,.3);axle(.24*L,.4,.3);axle(.38*L,.4,.3);lights(-H);beacon(2.1);}
+  else if(type==='box'){ // service cabinet on skids
+    add(new THREE.BoxGeometry(Lx,.12,L),steel,0,.06,0);prof([[-H,.12],[-H,1.6],[H,1.6],[H,.12]],Lx,C,.05);
+    for(let u=-H+.25;u<H-.1;u+=.18)add(new THREE.BoxGeometry(Lx+.02,.04,.08),dark,0,1.25,u);}
+  else if(type==='cone'){const cg=new THREE.ConeGeometry(.2,.72,14);add(cg,C,0,.42,0);add(new THREE.BoxGeometry(.42,.06,.42),dark,0,.03,0);add(new THREE.CylinderGeometry(.11,.13,.12,14),white,0,.52,0);}
   VEH.push(g);return g;}
 // stand 1 (left)
 veh(305,352,70,18,0,0xf0b91d,'gpu','地面电源车');veh(170,401,15,34,0,0xf2f2ef,'van','地勤面包车');veh(291,213,12,24,0,0xf1f1ee,'car','工作车');
 // stand 2 (middle)
-veh(487,382,14,40,0,0x9da1a5,'dolly','行李拖斗');veh(548,160,14,28,0,0x2d5fa8,'car','员工车辆');
+veh(487,382,14,40,0,0x9da1a5,'dolly','集装箱拖斗');veh(487,368,13,14,0,0xc6302b,'uld','LD3 航空集装箱');veh(487,396,13,14,0,0x2b6cb0,'uld','LD3 航空集装箱');veh(548,160,14,28,0,0x2d5fa8,'car','员工车辆');
 // between stands 2 and 3
-for(let i=0;i<4;i++)veh(852,302+i*16,14,14,0,0x8a5a2c,'cart','集装箱拖斗');
-veh(880,396,24,34,22,0xf3f3f0,'van','地勤面包车');veh(930,401,14,18,0,0xeeeeec,'car','小型工作车');veh(946,360,18,40,-30,0x4a4e54,'loader','客梯车');
-veh(922,258,20,30,0,0x80868c,'gpu','空调车');veh(832,207,24,20,0,0x55595e,'box','设备箱');veh(832,240,24,20,0,0x55595e,'box','设备箱');
+for(let i=0;i<4;i++){veh(852,302+i*16,14,15,0,0x8a8f94,'dolly','集装箱拖斗');veh(852,302+i*16,13,13,0,[0xc6302b,0x2b6cb0,0xc6302b,0xf0b91d][i],'uld','LD3 航空集装箱');}
+veh(880,396,24,34,22,0xf3f3f0,'van','地勤面包车');veh(930,401,14,18,0,0xeeeeec,'car','小型工作车');veh(946,360,18,40,-30,0x4a4e54,'loader','行李传送带车');
+veh(922,258,20,30,0,0x80868c,'gpu','地面空调车');veh(832,207,24,20,0,0x6b7075,'box','机坪配电柜');veh(832,240,24,20,0,0x6b7075,'box','机坪配电柜');
 for(let i=0;i<4;i++)veh(938+i*11,494-i*17,16,14,-55,0xf0f0ec,'cart','行李拖车');
 veh(966,436,18,14,-55,0x2c2f33,'tug','行李牵引车');
 // stand 3 (right)
-veh(1105,330,40,20,-20,0xd8c9a6,'truck','配餐车');veh(1176,560,42,14,8,0xf0be1a,'loader','行李传送带车');veh(1160,440,12,16,0,0xeeeeec,'cart','行李拖车');
+veh(1105,330,40,20,-20,0xd8c9a6,'catering','配餐车');veh(1176,560,42,14,8,0xf0be1a,'loader','行李传送带车');veh(1160,440,12,16,0,0xeeeeec,'cart','行李拖车');
 [[1158,154,0x2d5fa8],[1195,150,0xf2f2ef],[1215,154,0x3f8a5a],[1236,154,0xf2f2ef]].forEach(([a,b,c])=>veh(a,b,14,30,0,c,'car','员工车辆'));
 // bottom row
 [312,340,367,404,432].forEach(a=>veh(a,719,22,20,0,0xe57722,'cart','行李拖车 · 防雨罩'));
@@ -408,7 +519,7 @@ const train=new THREE.Group();LG[2].add(train);
 {const tg=veh(0,0,14,24,90,0x2c2f33,'tug','行李牵引车（行驶中）');LG[2].remove(tg);train.add(tg);tg.position.set(0,0,0);tg.rotation.y=-PI/2;
  for(let i=1;i<=4;i++){const c=veh(0,0,16,20,90,0xe57722,'cart','行李拖车（行驶中）');LG[2].remove(c);train.add(c);c.position.set(-i*2.3,0,0);c.rotation.y=-PI/2;}}
 train.position.set(-80,0,W(0,785).z);
-const bus=veh(0,0,26,110,90,0x2b6cb0,'van','摆渡车（行驶中）');bus.position.set(80,0,W(0,22).z);bus.rotation.y=PI/2;
+const bus=veh(0,0,26,110,0,0x2b6cb0,'van','摆渡车（行驶中）');bus.position.set(80,0,W(0,22).z);bus.rotation.y=PI/2;bus.scale.y=1.12;
 
 /* ================= crew figures ================= */
 const people=[];
@@ -480,7 +591,7 @@ const hose=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([SL(
 // chocks and cones placed after the aircraft stops
 const chocks=[[0,-11.4],[-1.4,.6],[1.4,.6],[-14.2,-.2],[14.2,-.2],[0,13.9]].map(([x,z],i)=>{const p=SL(x,z),m=veh(0,0,i<3?6:4,i<3?3:4,0,i<3?0xf2c21b:0xf06a1c,i<3?'box':'cone',i<3?'轮挡':'安全锥');m.position.copy(p);if(i<3)m.scale.y=.25;return m;});
 // moving baggage on the belt
-const bagG=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,.32,.7),M(2,'bags',{color:0x5b4a3c,roughness:.8}),6);bagG.userData={layer:2,name:'托运行李'};bagG.castShadow=true;loader.add(bagG);
+const bagG=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,.32,.7),M(2,'bags',{color:0x5b4a3c,roughness:.8}),6);bagG.userData={layer:2,name:'托运行李'};bagG.castShadow=true;loader.userData.belt.add(bagG);
 // ground crew who follow the turnaround
 const marshal=person(0,0,0xf6a21c,'引导员 · 举指挥棒');const mw=[-1,1].map(s=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.7,6),new THREE.MeshBasicMaterial({color:0xff6a1a}));w.position.y=-.6;marshal.userData.arms[s<0?0:1].add(w);return w;});
 const crew=[[2.2,-12.6],[-1.2,-12],[4,5],[5.2,8],[-3,9],[6.5,3.5],[1.2,-15.5]].map(([x,z],i)=>person(0,0,i%2?0xd8f23b:0xf6a21c,'机务人员'));
@@ -521,7 +632,7 @@ function taUpdate(dt){if(TA.play)TA.t=(TA.t+dt*.8*TA.speed)%CYCLE;const t=TA.t;
   cat.userData.box.position.y=cat.userData.boxY+2.2*(sst(10.6,11.8,t)-sst(23.2,24.4,t));cat.userData.sc.scale.y=.2+(cat.userData.box.position.y-cat.userData.boxY)/2.2*1.4;
   loader.userData.belt.rotation.x=-.06-.3*(sst(8,8.8,t)-sst(30,30.6,t));
   const flowing=(t>8.8&&t<17)||(t>19&&t<30);const dir=t<18?1:-1,m4=new THREE.Matrix4();
-  for(let i=0;i<6;i++){let f=((TA.t*1.6*dir+i/6)%1+1)%1;const z=lerp(-2.1,2.1,f);m4.compose(new V(0,1.75+z*Math.sin(.36)+.2,z),new THREE.Quaternion().setFromAxisAngle(new V(1,0,0),-.36),new V(flowing?1:0,flowing?1:0,flowing?1:0));bagG.setMatrixAt(i,m4);}bagG.instanceMatrix.needsUpdate=true;
+  for(let i=0;i<6;i++){let f=((TA.t*1.6*dir+i/6)%1+1)%1;const z=lerp(-2.1,2.1,f);m4.compose(new V(0,.3,z),new THREE.Quaternion(),new V(flowing?1:0,flowing?1:0,flowing?1:0));bagG.setMatrixAt(i,m4);}bagG.instanceMatrix.needsUpdate=true;
   chocks.forEach((c,i)=>c.visible=t>(i<3?3.3:3.7)&&t<(i<3?36.8:36.4));
   // people
   marshal.visible=t>.6&&t<3.6;marshal.position.copy(SL(0,-17.6));marshal.rotation.y=PI;
@@ -550,9 +661,21 @@ document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',
 $('btnRestart').addEventListener('click',()=>{TA.t=0;TA.play=true;syncPlay();goView('stand');});
 gRows.addEventListener('click',e=>{const r=e.target.closest('.g-row');if(!r)return;const R=ROWS.find(x=>x.k===r.dataset.k);TA.t=R.a+.01;});
 
+/* ================= bake static models: merge each group's parts per material (fewer draw calls) ================= */
+const animated=new Set([...svc.map(x=>x.g),...bagCarts,train,bus,pushTug,...chocks,marshal,...crew,P2.g]);
+function bake(g){if(!THREE.BufferGeometryUtils)return;g.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(g.matrixWorld).invert(),buckets=new Map();let name=null,layer=null;
+  g.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||Array.isArray(o.material)||o.material.isMeshBasicMaterial)return;name=name||o.userData.name;layer=o.userData.layer;
+    const geo=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();for(const k of Object.keys(geo.attributes))if(!['position','normal','uv'].includes(k))geo.deleteAttribute(k);
+    if(!geo.attributes.uv)geo.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count*2),2));
+    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv,o.matrixWorld));const k=o.material.uuid;if(!buckets.has(k))buckets.set(k,{m:o.material,geos:[],cs:o.castShadow});buckets.get(k).geos.push(geo);o.userData.dead=true;});
+  if(!buckets.size)return;const dead=[];g.traverse(o=>{if(o.userData.dead)dead.push(o);});dead.forEach(o=>o.parent.remove(o));
+  for(const {m,geos,cs} of buckets.values()){const merged=THREE.BufferGeometryUtils.mergeBufferGeometries(geos,false);if(!merged)continue;const mm=new THREE.Mesh(merged,m);mm.castShadow=cs;mm.receiveShadow=true;mm.userData={layer,name};g.add(mm);}}
+VEH.forEach(g=>{if(!animated.has(g))bake(g);});people.forEach(g=>{if(!animated.has(g))bake(g);});
+[planes[0],planes[2]].forEach(p=>bake(p.g));
+[0,2,3].forEach(i=>bake(bridges[i].g));LG[5].children.filter(o=>o.isGroup&&o!==LG[5]).forEach(bake);
 /* ================= counts & UI ================= */
-const count=LAYERS.map(()=>0);let total=0;LG.forEach((g,l)=>g.traverse(o=>{if(o.isMesh&&o.userData.name){count[l]++;total++;}}));
-$('stats').innerHTML=`<b>${planes.length}</b> 架客机 · <b>${bridges.length}</b> 座登机桥 · <b>${VEH.length}</b> 台地勤车辆与设备 · ${total} 个物体`;
+const count=LAYERS.map(()=>0);let total=0;LG.forEach((g,l)=>{const seen=new Set();g.traverse(o=>{if(o.isMesh&&o.userData.name){let r=o;while(r.parent&&r.parent!==g)r=r.parent;if(!seen.has(r)){seen.add(r);count[l]++;total++;}}});});
+$('stats').innerHTML=`<b>${planes.length}</b> 架客机 · <b>${bridges.length}</b> 座登机桥 · <b>${VEH.length}</b> 台地勤车辆与设备 · <b>${people.length}</b> 名地勤人员`;
 const chips=$('chips');
 const chip=(i,l,n,sw)=>`<button class="chip" data-l="${i}" aria-pressed="false"><i style="background:${sw}"></i>${l}<span>${n}</span></button>`;
 chips.innerHTML=chip('all','全部',total,'var(--fg)')+LAYERS.map((L,i)=>chip(i,L.n,count[i],`var(${L.sw})`)).join('');
