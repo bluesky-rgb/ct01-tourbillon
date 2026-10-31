@@ -1,0 +1,44 @@
+name: 生成 MiniMax 配音
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - audio/narration.json
+      - audio/gen_voice.py
+      - .github/workflows/voice.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: voice
+  cancel-in-progress: false
+
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 安装 ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: 调用 MiniMax 生成配音
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_URL: ${{ vars.MINIMAX_URL }}
+          MINIMAX_VOICE: ${{ vars.MINIMAX_VOICE }}
+          MINIMAX_MODEL: ${{ vars.MINIMAX_MODEL }}
+          MINIMAX_SPEED: ${{ vars.MINIMAX_SPEED }}
+        run: python3 audio/gen_voice.py
+      - name: 提交生成的配音
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add narration
+          if git diff --cached --quiet; then echo "配音没有变化"; exit 0; fi
+          git commit -m "配音：MiniMax 重新生成"
+          git push
