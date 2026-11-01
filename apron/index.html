@@ -555,13 +555,13 @@ function veh(px,py,lw,lh,rot,col,type,name){const g=new THREE.Group();let Lx=lw/
 // stand 1 (left)
 veh(305,352,70,18,0,0xf0b91d,'gpu','地面电源车');veh(170,401,15,34,0,0xf2f2ef,'van','地勤面包车');veh(291,213,12,24,0,0xf1f1ee,'car','工作车');
 // stand 2 (middle)
-veh(487,382,14,40,0,0x9da1a5,'dolly','集装箱拖斗');veh(487,368,13,14,0,0xc6302b,'uld','LD3 航空集装箱');veh(487,396,13,14,0,0x2b6cb0,'uld','LD3 航空集装箱');veh(548,160,14,28,0,0x2d5fa8,'car','员工车辆');
+veh(487,382,14,40,0,0x9da1a5,'dolly','集装箱拖斗');veh(487,368,13,14,0,0xc6302b,'uld','LD3 航空集装箱').position.y=.6;veh(487,396,13,14,0,0x2b6cb0,'uld','LD3 航空集装箱').position.y=.6;veh(548,160,14,28,0,0x2d5fa8,'car','员工车辆');
 // between stands 2 and 3
-for(let i=0;i<4;i++){veh(852,302+i*16,14,15,0,0x8a8f94,'dolly','集装箱拖斗');veh(852,302+i*16,13,13,0,[0xc6302b,0x2b6cb0,0xc6302b,0xf0b91d][i],'uld','LD3 航空集装箱');}
+for(let i=0;i<4;i++){veh(852,296+i*23,14,15,0,0x8a8f94,'dolly','集装箱拖斗');veh(852,296+i*23,13,13,0,[0xc6302b,0x2b6cb0,0xc6302b,0xf0b91d][i],'uld','LD3 航空集装箱').position.y=.6;}
 veh(880,396,24,34,22,0xf3f3f0,'van','地勤面包车');veh(930,401,14,18,0,0xeeeeec,'car','小型工作车');veh(946,360,18,40,-30,0x4a4e54,'loader','行李传送带车');
 veh(922,258,20,30,0,0x80868c,'gpu','地面空调车');veh(832,207,24,20,0,0x6b7075,'box','机坪配电柜');veh(832,240,24,20,0,0x6b7075,'box','机坪配电柜');
 for(let i=0;i<4;i++)veh(938+i*11,494-i*17,16,14,-55,0xf0f0ec,'cart','行李拖车');
-veh(966,436,18,14,-55,0x2c2f33,'tug','行李牵引车');
+veh(976,424,18,14,-55,0x2c2f33,'tug','行李牵引车');
 // stand 3 (right)
 veh(1105,330,40,20,-20,0xd8c9a6,'catering','配餐车');veh(1176,560,42,14,8,0xf0be1a,'loader','行李传送带车');veh(1160,440,12,16,0,0xeeeeec,'cart','行李拖车');
 [[1158,154,0x2d5fa8],[1195,150,0xf2f2ef],[1215,154,0x3f8a5a],[1236,154,0xf2f2ef]].forEach(([a,b,c])=>veh(a,b,14,30,0,c,'car','员工车辆'));
@@ -577,7 +577,7 @@ const train=new THREE.Group();LG[2].add(train);
 {const tg=veh(0,0,14,24,90,0x2c2f33,'tug','行李牵引车（行驶中）');LG[2].remove(tg);train.add(tg);tg.position.set(0,0,0);tg.rotation.y=-PI/2;
  for(let i=1;i<=4;i++){const c=veh(0,0,16,20,90,0xe57722,'cart','行李拖车（行驶中）');LG[2].remove(c);train.add(c);c.position.set(-i*2.3,0,0);c.rotation.y=-PI/2;}}
 train.position.set(-80,0,W(0,785).z);
-const bus=veh(0,0,26,110,0,0x2b6cb0,'van','摆渡车（行驶中）');bus.position.set(80,0,W(0,22).z);bus.rotation.y=PI/2;bus.scale.y=1.12;
+const bus=veh(0,0,26,110,0,0x2b6cb0,'van','摆渡车（行驶中）');bus.position.set(80,0,43);bus.rotation.y=PI/2;bus.scale.y=1.12;
 
 /* ================= crew figures ================= */
 const people=[];
@@ -613,46 +613,51 @@ const easeOut=k=>1-Math.pow(1-k,3),easeIn=k=>k*k*k;
 // service vehicles: path from the service road to the parking spot, schedule [arrive0, arrive1, leave0, leave1]
 const svc=[];
 function service(g,pts,sch,opt={}){const curve=new THREE.CatmullRomCurve3(pts.map(([x,z])=>SL(x,z)),false,'centripetal',.4);
-  const s={g,curve,sch,len:curve.getLength(),train:opt.train||[],out:opt.out?new THREE.CatmullRomCurve3(opt.out.map(([x,z])=>SL(x,z)),false,'centripetal',.4):null};svc.push(s);return s;}
+  const s={g,curve,sch,len:curve.getLength(),train:opt.train||[],out:opt.out?new THREE.CatmullRomCurve3(opt.out.map(([x,z])=>SL(x,z)),false,'centripetal',.4):null};
+  if(s.out&&s.train.length){s.combo=new THREE.CatmullRomCurve3(pts.concat(opt.out.slice(1)).map(([x,z])=>SL(x,z)),false,'centripetal',.4);s.len=s.combo.getLength()*(curve.getLength()/(curve.getLength()+s.out.getLength()));}
+  svc.push(s);return s;}
 function poseOn(curve,u,g,back){u=clamp(u,0,1);const p=curve.getPointAt(u),t=curve.getTangentAt(u);g.position.set(p.x,0,p.z);g.rotation.y=Math.atan2(back?t.x:-t.x,back?t.z:-t.z);}
-function svcUpdate(s,t){const [a0,a1,d0,d1]=s.sch;let vis=t>=a0&&t<=d1,u=0,curve=s.curve,back=false;
-  if(t<a1)u=easeOut(clamp((t-a0)/(a1-a0),0,1));else if(t<d0)u=1;else if(s.out){curve=s.out;u=easeIn(clamp((t-d0)/(d1-d0),0,1));}else{u=1-easeIn(clamp((t-d0)/(d1-d0),0,1));back=true;}
-  s.g.visible=vis;if(!vis){s.train.forEach(c=>c.visible=false);return;}
-  if(s.out&&t>=d0)poseOn(curve,u,s.g);else poseOn(curve,u,s.g,back&&false);
-  const L=(s.out&&t>=d0)?s.out.getLength():s.len;
-  s.train.forEach((c,i)=>{c.visible=true;const uu=(s.out&&t>=d0)?u-(i+1)*2.4/L:u-(i+1)*2.4/L;if(uu<0&&!(s.out&&t>=d0)){c.visible=t>a0+.2;}poseOn(curve,Math.max(0,uu),c);});}
+function svcUpdate(s,t){const [a0,a1,d0,d1]=s.sch;const vis=t>=a0&&t<=d1;
+  s.g.visible=vis;s.train.forEach(c=>c.visible=vis);if(!vis)return;
+  if(s.combo){ // trains drive one continuous route (in, park, out) so every cart follows the tug's own tracks
+    const Lin=s.len,Lout=s.out.getLength(),Lc=s.combo.getLength();
+    const d=t<a1?easeOut(clamp((t-a0)/(a1-a0),0,1))*Lin:t<d0?Lin:Lin+easeIn(clamp((t-d0)/(d1-d0),0,1))*Lout;
+    const at=(g,dist)=>{if(dist>=0){poseOn(s.combo,Math.min(1,dist/Lc),g);return;}const p0=s.combo.getPointAt(0),t0=s.combo.getTangentAt(0);g.position.set(p0.x+t0.x*dist,0,p0.z+t0.z*dist);g.rotation.y=Math.atan2(-t0.x,-t0.z);};
+    at(s.g,d);s.train.forEach((c,i)=>at(c,d-(3.0+i*2.85)));return;}
+  let u;if(t<a1)u=easeOut(clamp((t-a0)/(a1-a0),0,1));else if(t<d0)u=1;else if(s.out){poseOn(s.out,easeIn(clamp((t-d0)/(d1-d0),0,1)),s.g);return;}else u=1-easeIn(clamp((t-d0)/(d1-d0),0,1));
+  poseOn(s.curve,u,s.g);}
 
 // GPU on the right of the nose
 const gpu=veh(0,0,16,30,0,0xf0b91d,'gpu','地面电源车 · 400 Hz 供电');
-const sGpu=service(gpu,[[34,-30],[14,-26],[5,-17],[3.2,-11.5]],[3.6,5.2,38,40.5]);
+const sGpu=service(gpu,[[6,-44],[6.5,-31],[5,-20],[3.2,-11.5]],[3.6,5.2,38,40.5]);
 // belt loader to the aft cargo hold (right side) + baggage train
 const loader=veh(0,0,16,46,0,0x8b5a2b,'loader','行李传送带车');
 const sLoad=service(loader,[[40,30],[16,26],[6,13],[2.9,5.8]],[6.2,8,30.5,32.5]);
 const bagTug=veh(0,0,14,22,0,0x2c2f33,'tug','行李牵引车');const bagCarts=[0,1,2].map(()=>veh(0,0,16,20,0,0xe57722,'cart','行李拖车 · 防雨罩'));
-const sBag=service(bagTug,[[46,40],[24,34],[9,22],[6.5,13.5]],[7.2,9.5,29.5,32],{train:bagCarts,out:[[6.5,13.5],[10,24],[24,34],[50,40]]});
+const sBag=service(bagTug,[[46,40],[24,34],[9,22],[6.5,13.5]],[7.2,9.5,29.5,32],{train:bagCarts,out:[[6.5,13.5],[5.6,10],[7.6,7.4],[14,8],[30,16],[54,40]]});
 // catering truck to the left aft door, box lifts on scissors
 const cat=veh(0,0,30,64,0,0xf1f1ee,'catering','配餐车 · 剪式升降');
 const sCat=service(cat,[[-38,36],[-18,30],[-8,18],[-4.4,10.2]],[8.6,10.4,24.6,26.6]);
 // fuel truck under the right wing
 const fuel=veh(0,0,26,80,0,0xe6e6e2,'fuel','加油车 · 航空煤油');
-const sFuel=service(fuel,[[52,24],[26,16],[12,8],[8.5,2.5]],[11.2,12.8,25.8,27.8]);
+const sFuel=service(fuel,[[9,-46],[9,-30],[9.6,-16],[10.2,-5.6]],[11.2,12.8,25.8,27.8]);
 // cleaning van at the right front door
 const cleanV=veh(0,0,16,34,0,0x3a7bd5,'van','客舱清洁车');
-const sClean=service(cleanV,[[34,-34],[16,-28],[7,-16],[4.6,-8.6]],[12.2,13.6,21,22.6]);
+const sClean=service(cleanV,[[11,-44],[11,-30],[7.5,-17],[4.6,-8.6]],[12.2,13.6,21,22.6]);
 // pushback tug arrives from the east service lane, couples at the nose
 const pushTug=veh(0,0,24,50,0,0x2d3035,'tug','推出牵引车');
-const sPushIn=service(pushTug,[[60,-30],[24,-26],[8,-20.5],[0,-16.2]],[33.5,36,99,99]);
+const sPushIn=service(pushTug,[[-7,-44],[-6,-31],[-2,-21],[0,-16.2]],[33.5,36,99,99]);
 
 // GPU cable, fuel hose
 const cable=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([SL(3.2,-12.6).setY(.9),SL(2.3,-12).setY(.12),SL(1,-11).setY(.15),SL(.6,-10.6).setY(1.1)]),16,.06,6),M(2,'hose',{color:0x1b1c1e,roughness:.7}));cable.userData={layer:2,name:'电源线'};LG[2].add(cable);
-const hose=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([SL(8.5,1.7).setY(1.4),SL(7.8,1.2).setY(.15),SL(6.8,.8).setY(.2),SL(6.2,.4).setY(1.75)]),16,.08,6),M(2,'hose'));hose.userData={layer:2,name:'加油软管'};LG[2].add(hose);
+const hose=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([SL(10.2,-1.6).setY(1.2),SL(10,-.6).setY(.15),SL(9.6,1.4).setY(.15),SL(9.3,2.9).setY(2.8)]),20,.08,6),M(2,'hose'));hose.userData={layer:2,name:'加油软管'};LG[2].add(hose);
 // chocks and cones placed after the aircraft stops
 const chocks=[[0,-11.4],[-1.4,.6],[1.4,.6],[-14.2,-.2],[14.2,-.2],[0,13.9]].map(([x,z],i)=>{const p=SL(x,z),m=veh(0,0,i<3?6:4,i<3?3:4,0,i<3?0xf2c21b:0xf06a1c,i<3?'box':'cone',i<3?'轮挡':'安全锥');m.position.copy(p);if(i<3)m.scale.y=.25;return m;});
 // moving baggage on the belt
 const bagG=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,.32,.7),M(2,'bags',{color:0x5b4a3c,roughness:.8}),6);bagG.userData={layer:2,name:'托运行李'};bagG.castShadow=true;loader.userData.belt.add(bagG);
 // ground crew who follow the turnaround
 const marshal=person(0,0,0xf6a21c,'引导员 · 举指挥棒');const mw=[-1,1].map(s=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.7,6),new THREE.MeshBasicMaterial({color:0xff6a1a}));w.position.y=-.6;marshal.userData.arms[s<0?0:1].add(w);return w;});
-const crew=[[2.2,-12.6],[-1.2,-12],[4,5],[5.2,8],[-3,9],[6.5,3.5],[1.2,-15.5]].map(([x,z],i)=>person(0,0,i%2?0xd8f23b:0xf6a21c,'机务人员'));
+const CREW=[[2.2,-12.6],[-1.2,-12],[4,5],[5.2,8],[-1.8,6.5],[6.5,3.5],[-3.8,-17.6]];const crew=CREW.map(([x,z],i)=>person(0,0,i%2?0xd8f23b:0xf6a21c,'机务人员'));
 const crewSch=[[3.2,38],[3.4,37.5],[8,31],[9.5,31],[10.4,25],[12.8,26],[36,41]];
 
 // visual docking guidance board on the pier facade
@@ -676,12 +681,13 @@ function taUpdate(dt){if(TA.play)TA.t=(TA.t+dt*.8*TA.speed)%CYCLE;const t=TA.t;
   const g=P2.g,ho=P2.home;let p=ho.p.clone(),r=ho.r,vis=true;
   if(t<3){p.z+=72*(1-easeOut(t/3));}
   else if(t>=37.5&&t<41){const e=sst(37.5,41,t),turn=clamp((e-.35)/.65,0,1);p.z+=e*33;p.x-=turn*turn*6;r-=turn*turn*(3-2*turn)*PI/2;}
-  else if(t>=41){const e=easeIn(clamp((t-41)/3,0,1));p.z+=33;p.x+=-6+e*120;r-=PI/2;vis=t<44.2;}
+  else if(t>=41){const e=easeIn(clamp((t-41.7)/2.6,0,1));p.z+=33;p.x+=-6+e*120;r-=PI/2;vis=t<44.4;}
   g.position.copy(p);g.rotation.y=r;g.visible=vis;
   const engOn=t<4||t>39.6;P2.spin+=(engOn?1:0-P2.spin)*0;P2.rpm=lerp(P2.rpm||0,engOn?1:0,Math.min(1,dt*(engOn?1.2:.5)));
   // pushback tug: comes in, couples at the nose, rides along during the push, leaves to the east
   if(t>=36&&t<41.2){pushTug.visible=true;const nose=new V(0,0,-P2.L/2-2.2).applyAxisAngle(new V(0,1,0),g.rotation.y).add(g.position);pushTug.position.set(nose.x,0,nose.z);pushTug.rotation.y=g.rotation.y;}
-  else if(t>=41.2&&t<43.5){pushTug.visible=true;pushTug.position.x+=dt*.8*TA.speed*4;}else svcUpdate(sPushIn,t);
+  else if(t>=41.2&&t<43.2){pushTug.visible=true;const k=sst(41.2,43.2,t),nose=new V(P2.L/2+2.2,0,0).add(ho.p).add(new V(-6,0,33));
+    pushTug.position.set(nose.x+3*Math.sin(k*PI*.5),0,nose.z-k*26);pushTug.rotation.y=lerp(-PI/2,0,Math.min(1,k*2.5));}else svcUpdate(sPushIn,t);
   // jet bridge: extend at 3.5–5.5, retract at 35.5–37
   const ret=1-sst(3.5,5.5,t)+sst(35.5,37,t);B2.t2.position.copy(B2.base2).addScaledVector(B2.dir,-4.5*ret);B2.cab.position.copy(B2.baseCab).addScaledVector(B2.dir,-6.5*ret);
   [sGpu,sLoad,sBag,sCat,sFuel,sClean].forEach(s=>svcUpdate(s,t));
@@ -695,7 +701,7 @@ function taUpdate(dt){if(TA.play)TA.t=(TA.t+dt*.8*TA.speed)%CYCLE;const t=TA.t;
   // people
   marshal.visible=t>.6&&t<3.6;marshal.position.copy(SL(0,-17.6));marshal.rotation.y=PI;
   const wave=Math.sin(performance.now()/260);marshal.userData.arms.forEach((a,i)=>{a.rotation.z=(i?-1:1)*(2.6+.35*wave*(t<3?1:0));});
-  crew.forEach((c,i)=>{const [a,b]=crewSch[i];c.visible=t>a&&t<b;const base=[[2.2,-12.6],[-1.2,-12],[4,5],[5.2,8],[-3,9],[6.5,3.5],[1.2,-15.5]][i];c.position.copy(SL(base[0],base[1]+.15*Math.sin(t*3+i)));c.rotation.y=i*1.3;});
+  crew.forEach((c,i)=>{const [a,b]=crewSch[i];c.visible=t>a&&t<b;const base=CREW[i];c.position.copy(SL(base[0],base[1]+.15*Math.sin(t*3+i)));c.rotation.y=i*1.3;});
   // docking guidance board
   if(t<3){const dist=(p.z-ho.p.z)*1.32;dist>14?vdDraw('A320',`${dist.toFixed(0)} m`,'#ffd34d',1-dist/95):vdDraw('A320',`${dist.toFixed(1)} m`,'#ffd34d',1-dist/95);}
   else if(t<3.5)vdDraw('STOP','','#ff3b30');else if(t<5.5)vdDraw('OK','CHOCKS ON','#38e07b');else if(t<35)vdDraw('CT2','ON BLOCK','#38e07b');
