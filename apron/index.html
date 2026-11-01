@@ -323,8 +323,10 @@ function makePlane(o){const g=new THREE.Group(),T=o.type==='757'?{belly:1.85,c0:
   const L=o.L,S=o.S,r=o.r,cy=r+T.belly;
   const lt=tex(liveryCanvas(o.kind,T.doors)),ld='l'+o.id;
   // fuselage: lathe, then lift the tail cone (rear underside sweeps up) and droop the nose slightly
-  const off=f=>f>.6?(1-RF(f))*r*.85:f<.12?-(1-RF(f))*r*.3:0;
-  const pts=[];for(let i=0;i<=56;i++){const f=i/56;pts.push(new THREE.Vector2(Math.max(.02,RF(f)*r),-L/2+f*L));}
+  // 757-class: longer, pointier nose with a lower chin and a raised flight deck; A320-family: rounder, blunter nose
+  const rf=T.bogie?(f=>f<.1?Math.pow(Math.max(0,1-Math.pow((.1-f)/.1,2)),.72):RF(f)):RF;
+  const off=f=>f>.6?(1-rf(f))*r*.85:f<.12?-(1-rf(f))*r*(T.bogie?.5:.3):0;
+  const pts=[];for(let i=0;i<=64;i++){const f=i/64;pts.push(new THREE.Vector2(Math.max(.02,rf(f)*r),-L/2+f*L));}
   const fg=new THREE.LatheGeometry(pts,40);fg.rotateX(PI/2);
   {const P=fg.attributes.position;for(let i=0;i<P.count;i++){const f=(P.getZ(i)+L/2)/L;P.setY(i,P.getY(i)+off(f));}fg.computeVertexNormals();}
   const fus=mesh(fg,3,ld+'f',{map:lt,roughness:.32,metalness:.05},`${o.name} · 机身`,g);fus.position.y=cy;
@@ -363,10 +365,11 @@ function makePlane(o){const g=new THREE.Group(),T=o.type==='757'?{belly:1.85,c0:
    const bc=new THREE.Mesh(new THREE.SphereGeometry(.22,10,8),new THREE.MeshBasicMaterial({color:0xff2a2a}));bc.position.set(0,cy+r+.15,-.05*L);g.add(bc);o.beacon=bc;}
   // landing gear: nose leg under the cockpit; main legs hang from the wing roots (A320: twin wheels, 757: four-wheel bogies)
   const strutM={color:0xb9bdc1,roughness:.35,metalness:.7};
-  const wheels=(x,z,wr,nm,pairs)=>pairs.forEach(dz=>{for(const sx of [-1,1]){const wgeo=new THREE.CylinderGeometry(wr,wr,.34,18);wgeo.rotateZ(PI/2);mesh(wgeo,3,'tyre',{color:0x1b1c1e,roughness:.85},`${o.name} · ${nm}`,g).position.set(x+sx*(wr*.62+.06),wr,z+dz);
-      const hb=new THREE.CylinderGeometry(wr*.5,wr*.5,.36,12);hb.rotateZ(PI/2);mesh(hb,3,'hub',{color:0x9ea3a8,roughness:.4,metalness:.6},`${o.name} · ${nm}`,g).position.set(x+sx*(wr*.62+.06),wr,z+dz);}});
+  const wheels=(x,z,wr,nm,pairs)=>pairs.forEach(dz=>{for(const sx of [-1,1]){const wgeo=new THREE.CylinderGeometry(wr,wr,.34,18);wgeo.rotateZ(PI/2);const tm=mesh(wgeo,3,'tyre',{color:0x1b1c1e,roughness:.85},`${o.name} · ${nm}`,g);tm.position.set(x+sx*(wr*.62+.06),wr,z+dz);
+      const hb=new THREE.CylinderGeometry(wr*.5,wr*.5,.36,12);hb.rotateZ(PI/2);const hm=mesh(hb,3,'hub',{color:0x9ea3a8,roughness:.4,metalness:.6},`${o.name} · ${nm}`,g);hm.position.set(x+sx*(wr*.62+.06),wr,z+dz);
+      (g.userData.wheels=g.userData.wheels||[]).push({m:tm,r:wr,front:nm==='前起落架'},{m:hm,r:wr,front:nm==='前起落架'});}});
   const leg=(x,z,y0,y1,nm)=>{const st=mesh(new THREE.CylinderGeometry(.12,.12,y1-y0,8),3,'strut',strutM,`${o.name} · ${nm}`,g);st.position.set(x,(y0+y1)/2,z);return st;};
-  const nz=-L/2+T.noseF*L,nwr=.3;leg(0,nz,nwr,cy-r+off(T.noseF)+.1,'前起落架');wheels(0,nz,nwr,'前起落架',[0]);
+  const nz=-L/2+T.noseF*L,nwr=.3;leg(0,nz,nwr,cy-rf(T.noseF)*r+off(T.noseF)+.1,'前起落架');wheels(0,nz,nwr,'前起落架',[0]);
   const mz=z0+T.gk*c0,mwr=.47;
   for(const s of [-1,1]){const x=s*T.gTrack,top=ty(x)-.15;
     if(T.bogie){leg(x,mz,mwr+.35,top,'主起落架');const bb=mesh(new THREE.BoxGeometry(.22,.22,1.9),3,'strut',strutM,`${o.name} · 主起落架`,g);bb.position.set(x,mwr+.15,mz);wheels(x,mz,mwr,'主起落架 · 四轮小车',[-.7,.7]);}
@@ -375,7 +378,7 @@ function makePlane(o){const g=new THREE.Group(),T=o.type==='757'?{belly:1.85,c0:
     br.position.set(s*(T.gTrack+r*.8)/2,(top+mwr+.6)/2,mz+.25);br.rotation.z=s*Math.atan2(T.gTrack-r*.8,top-mwr-.6);}
   const bf=mesh(new THREE.SphereGeometry(1,24,14),3,'belly',{color:0xc4c8cc,roughness:.45,metalness:.1},`${o.name} · 翼身整流罩`,g);bf.scale.set(r*1.02,r*.5,c0*.62);bf.position.set(0,wy,z0+c0*.48);
   // door geometry for jet bridges and catering
-  o.T=T;o.cy=cy;o.sill=cy-r*.45;o.door=f=>new V(-r,cy-r*.45,-L/2+f*L);
+  g.userData.wb=-(-L/2+T.noseF*L)+z0+T.gk*c0;o.T=T;o.cy=cy;o.sill=cy-r*.45;o.door=f=>new V(-r,cy-r*.45,-L/2+f*L);
   // place to match the photo: nose and tail pixels
   const nose=W(o.nose[0],o.nose[1]),tail=W(o.tail[0],o.tail[1]),d=nose.clone().sub(tail).normalize(),c=nose.clone().add(tail).multiplyScalar(.5);
   g.position.copy(c);g.rotation.y=Math.atan2(-d.x,-d.z);ao(g,r*3.2,L*1.02,3,.38);ao(g,S*.55,c0*1.2,3,.16,0,z0+c0*.5);LG[3].add(g);o.g=g;o.home={p:g.position.clone(),r:g.rotation.y};planes.push(o);return o;}
@@ -397,7 +400,7 @@ function bridge(R,C,name,pl){const g=new THREE.Group();LG[4].add(g);const a=W(..
   else{cabC=W(...C).setY(4.6);}
   const b=cabC.clone().setY(0);if(pl)b.addScaledVector(toFus,-1.5);
   const dir=b.clone().sub(a),L=dir.length();dir.normalize();const ang=Math.atan2(dir.x,dir.z),yR=4.7,pitch=Math.atan2(yR-yC,L);if(!pl)cabYaw=ang+.25;
-  const sideM=M(4,'side',{color:0xb9bfc2,roughness:.35,metalness:.35}),glassM=M(4,'bglass',{color:0x22303a,roughness:.08,metalness:.6}),whiteM=M(4,'white',{color:0xeeeeec,roughness:.55}),legM=M(4,'leg',{color:0x6d7276,roughness:.45,metalness:.5}),tyreM=M(4,'btyre',{color:0x161718,roughness:.9});
+  const sideM=M(4,'side',{color:0xb9bfc2,roughness:.35,metalness:.35}),glassM=M(4,'bglass',{color:0x3a5560,roughness:.05,metalness:.3,transparent:true,opacity:.38,depthWrite:false}),whiteM=M(4,'white',{color:0xeeeeec,roughness:.55}),legM=M(4,'leg',{color:0x6d7276,roughness:.45,metalness:.5}),tyreM=M(4,'btyre',{color:0x161718,roughness:.9});
   const tag=(m,nm)=>{m.castShadow=m.receiveShadow=true;m.userData={layer:4,name:`${name} · ${nm}`};return m;};
   // rotunda: glazed drum on a column
   const col=tag(new THREE.Mesh(new THREE.CylinderGeometry(.9,1.1,3.2,16),legM),'旋转平台');col.position.copy(a).setY(1.6);g.add(col);
@@ -407,16 +410,21 @@ function bridge(R,C,name,pl){const g=new THREE.Group();LG[4].add(g);const a=W(..
   // telescopic tunnels: ribbed steel skin, glazing band, rounded roof
   const tube=(f0,f1,w,h,y,nm)=>{const len=(f1-f0)*L/Math.cos(pitch),grp=new THREE.Group();grp.position.copy(a).addScaledVector(dir,(f0+f1)/2*L).setY(lerp(yR,yC,(f0+f1)/2)+(y-4.7));grp.rotation.order='YXZ';grp.rotation.y=ang;grp.rotation.x=pitch;g.add(grp);
     const t=ribT.clone();t.needsUpdate=true;t.repeat.set(len/1.6,1);const rib=new THREE.MeshStandardMaterial({map:t,roughness:.45,metalness:.35});rib.userData={};layerMats[4].push(rib);
-    const sh=new THREE.Shape(),r=.35;sh.moveTo(-w/2,-h/2);sh.lineTo(w/2,-h/2);sh.lineTo(w/2,h/2-r);sh.quadraticCurveTo(w/2,h/2,w/2-r,h/2);sh.lineTo(-w/2+r,h/2);sh.quadraticCurveTo(-w/2,h/2,-w/2,h/2-r);sh.lineTo(-w/2,-h/2);
-    const geo=new THREE.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false,curveSegments:4});geo.translate(0,0,-len/2);
-    grp.add(tag(new THREE.Mesh(geo,rib),nm));
-    for(const s of [-1,1]){const gl=tag(new THREE.Mesh(new THREE.BoxGeometry(.04,.75,len*.94),glassM),nm);gl.position.set(s*(w/2+.01),.35,0);grp.add(gl);}
+    // shell with a real window band: lower wall, upper wall and a rounded roof, so passengers inside show through the glass
+    const wall=(y0,y1,sx)=>{const m=tag(new THREE.Mesh(new THREE.BoxGeometry(.08,y1-y0,len),rib),nm);m.position.set(sx*w/2,(y0+y1)/2,0);grp.add(m);};
+    for(const sx of [-1,1]){wall(-h/2,-.95,sx);wall(.05,h/2-.35,sx);}
+    const rs=new THREE.Shape(),r=.35;rs.moveTo(-w/2,h/2-r);rs.quadraticCurveTo(-w/2,h/2,-w/2+r,h/2);rs.lineTo(w/2-r,h/2);rs.quadraticCurveTo(w/2,h/2,w/2,h/2-r);rs.lineTo(w/2,h/2-r-.1);rs.lineTo(-w/2,h/2-r-.1);
+    const rg=new THREE.ExtrudeGeometry(rs,{depth:len,bevelEnabled:false,curveSegments:4});rg.translate(0,0,-len/2);grp.add(tag(new THREE.Mesh(rg,rib),nm));
+    const ceil=tag(new THREE.Mesh(new THREE.BoxGeometry(w,.06,len),rib),nm);ceil.position.y=h/2-r-.1;grp.add(ceil);
+    for(const s of [-1,1]){const gl=tag(new THREE.Mesh(new THREE.BoxGeometry(.03,1.0,len*.98),glassM),nm);gl.position.set(s*(w/2),-.45,0);gl.castShadow=false;grp.add(gl);
+      for(let u=-len/2+.8;u<len/2;u+=1.6){const mu=tag(new THREE.Mesh(new THREE.BoxGeometry(.1,1.0,.08),M(4,'mullion',{color:0x3a3f44,roughness:.5,metalness:.4})),nm);mu.position.set(s*w/2,-.45,u);grp.add(mu);}}
     const fl=tag(new THREE.Mesh(new THREE.BoxGeometry(w*.96,.18,len),legM),nm);fl.position.y=-h/2-.08;grp.add(fl);return grp;};
   const t1=tube(.06,.56,3.5,3.0,4.7,'固定通道'),t2=tube(.5,.99,3.0,2.7,4.6,'伸缩通道');
   // cab with folding canopy (bellows) that seals against the door
   const cab=new THREE.Group();cab.position.copy(cabC);cab.rotation.y=cabYaw;g.add(cab);
-  const cb=tag(new THREE.Mesh(new THREE.BoxGeometry(4.0,3.0,3.0),whiteM),'舱门对接口');cab.add(cb);
-  for(const s of [-1,1]){const w=tag(new THREE.Mesh(new THREE.BoxGeometry(.04,.9,2.2),glassM),'舱门对接口');w.position.set(s*2.01,.4,0);cab.add(w);}
+  [[-1.5,-.95,1.1],[.45,1.5,1.05]].forEach(([y0,y1])=>{const m=tag(new THREE.Mesh(new THREE.BoxGeometry(4.0,y1-y0,3.0),whiteM),'舱门对接口');m.position.y=(y0+y1)/2;cab.add(m);});
+  const cbk=tag(new THREE.Mesh(new THREE.BoxGeometry(4.0,1.4,.1),whiteM),'舱门对接口');cbk.position.set(0,-.25,-1.45);cab.add(cbk);
+  for(const s of [-1,1]){const w=tag(new THREE.Mesh(new THREE.BoxGeometry(.04,1.0,2.2),glassM),'舱门对接口');w.position.set(s*2.01,-.4,0);cab.add(w);}
   for(let i=0;i<5;i++){const f=tag(new THREE.Mesh(new THREE.BoxGeometry(3.3-i*.08,2.7-i*.06,.18),M(4,'bellows',{color:0x2b2d30,roughness:.85})),'遮篷 · 折叠式');f.position.z=1.6+i*.2;cab.add(f);}
   // drive column with two big tyres
   const dp=a.clone().addScaledVector(dir,.8*L);const drv=new THREE.Group();drv.position.copy(dp);drv.rotation.y=ang;g.add(drv);const legTop=lerp(yR,yC,.8)-1.45,legH=legTop-.9;
@@ -424,7 +432,7 @@ function bridge(R,C,name,pl){const g=new THREE.Group();LG[4].add(g);const a=W(..
     const ty=new THREE.CylinderGeometry(.55,.55,.45,20);ty.rotateZ(PI/2);const t=tag(new THREE.Mesh(ty,tyreM),'驱动轮组');t.position.set(s*1.15,.55,0);drv.add(t);}
   const ax=tag(new THREE.Mesh(new THREE.BoxGeometry(2.6,.45,.6),legM),'驱动轮组');ax.position.y=.7;drv.add(ax);
   const ctl=tag(new THREE.Mesh(new THREE.BoxGeometry(1.0,.8,.7),M(4,'ctl',{color:0xf0b91d,roughness:.5})),'驱动控制箱');ctl.position.set(0,1.3,.5);drv.add(ctl);
-  bridges.push({g,t2,cab,a,dir,L,base2:t2.position.clone(),baseCab:cab.position.clone()});return g;}
+  bridges.push({g,t2,cab,a,b,dir,L,yR,yC,cabC,sill:pl?pl.sill:3.1,door:pl?cabC.clone().addScaledVector(toFus,2.55).setY(pl.sill):cabC,base2:t2.position.clone(),baseCab:cab.position.clone()});return g;}
 bridge([12,208],[226,357],'1 号登机桥',planes[0]);
 bridge([420,210],[662,378],'2 号登机桥',planes[1]);
 bridge([957,206],[1098,386],'3 号登机桥',planes[2]);
@@ -481,7 +489,8 @@ function veh(px,py,lw,lh,rot,col,type,name){const g=new THREE.Group();let Lx=lw/
   // side profile (u = along length, front at -Lz/2) extruded across the width
   const prof=(pts,w,mat,bev=.06,x=0)=>{const s=new THREE.Shape();pts.forEach(([u,y],i)=>i?s.lineTo(u,y):s.moveTo(u,y));
     const geo=new THREE.ExtrudeGeometry(s,{depth:Math.max(.02,w-2*bev),bevelEnabled:bev>0,bevelThickness:bev,bevelSize:bev,bevelSegments:2,curveSegments:6});geo.translate(0,0,-(w-2*bev)/2);geo.rotateY(-PI/2);return add(geo,mat,x,0,0);};
-  const wheel=(x,z,r,w=.24)=>{const t=new THREE.CylinderGeometry(r,r,w,18);t.rotateZ(PI/2);add(t,tyre,x,r,z);const h=new THREE.CylinderGeometry(r*.55,r*.55,w+.02,12);h.rotateZ(PI/2);add(h,hub,x,r,z);};
+  const wheel=(x,z,r,w=.24)=>{const t=new THREE.CylinderGeometry(r,r,w,18);t.rotateZ(PI/2);const tm=add(t,tyre,x,r,z);const h=new THREE.CylinderGeometry(r*.55,r*.55,w+.02,12);h.rotateZ(PI/2);const hm=add(h,hub,x,r,z);
+    (g.userData.wheels=g.userData.wheels||[]).push({m:tm,r,front:z<-.05},{m:hm,r,front:z<-.05});g.userData.wb=Lz*.62;};
   const axle=(z,r,w=.24,ins=0)=>{for(const s of [-1,1])wheel(s*(Lx/2-w/2-ins),z,r,w);};
   const lights=(zf)=>{for(const s of [-1,1]){add(new THREE.BoxGeometry(.16,.1,.04),lamp,s*(Lx/2-.18),.72,zf-.01);}};
   const beacon=y=>add(new THREE.CylinderGeometry(.09,.11,.16,10),amber,0,y,0);
@@ -678,8 +687,9 @@ const chocks=[[0,-11.4],[-1.4,.6],[1.4,.6],[-14.2,-.2],[14.2,-.2],[0,13.9]].map(
 const bagG=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,.32,.7),M(2,'bags',{color:0x5b4a3c,roughness:.8}),6);bagG.userData={layer:2,name:'托运行李'};bagG.castShadow=true;loader.userData.belt.add(bagG);
 // ground crew who follow the turnaround
 const marshal=person(0,0,0xf6a21c,'引导员 · 举指挥棒');const mw=[-1,1].map(s=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.7,6),new THREE.MeshBasicMaterial({color:0xff6a1a}));w.position.y=-.6;marshal.userData.arms[s<0?0:1].add(w);return w;});
-const CREW=[[2.2,-12.6],[-1.2,-12],[4,5],[5.2,8],[-1.8,6.5],[6.5,3.5],[-3.8,-17.6]];const crew=CREW.map(([x,z],i)=>person(0,0,i%2?0xd8f23b:0xf6a21c,'机务人员'));
-const crewSch=[[3.2,38],[3.4,37.5],[8,31],[9.5,31],[10.4,25],[12.8,26],[36,41]];
+const CREW=[[2.2,-12.6],[-1.2,-12],[4,5],[5.2,8],[-2.4,3.6],[6.5,3.5],[-3.8,-17.6]];
+const CREWIN=[[8,-21],[-1.2,-21],[16,5],[16,8],[-16,3.6],[16,3.5],[-12,-17.6]];const crew=CREW.map(([x,z],i)=>person(0,0,i%2?0xd8f23b:0xf6a21c,'机务人员'));
+const crewSch=[[3.2,38],[3.4,33],[8,31],[9.5,31],[10.4,25],[12.8,26],[36,41]];
 
 // visual docking guidance board on the pier facade
 const vdC=cvs(256,128),vdX=vdC.getContext('2d'),vdT=tex(vdC);
@@ -725,12 +735,41 @@ function taUpdate(dt){if(TA.play)TA.t=(TA.t+dt*.8*TA.speed)%CYCLE;const t=TA.t;
   // people
   marshal.visible=t>.6&&t<3.6;marshal.position.copy(SL(0,-17.6));marshal.rotation.y=PI;
   const wave=Math.sin(performance.now()/260);marshal.userData.arms.forEach((a,i)=>{a.rotation.z=(i?-1:1)*(2.6+.35*wave*(t<3?1:0));});
-  crew.forEach((c,i)=>{const [a,b]=crewSch[i];c.visible=t>a&&t<b;const base=CREW[i];c.position.copy(SL(base[0],base[1]+.15*Math.sin(t*3+i)));c.rotation.y=i*1.3;});
+  crew.forEach((c,i)=>{const [a,b]=crewSch[i];c.visible=t>a&&t<b;if(!c.visible)return;const B=SL(...CREW[i]),E=SL(...CREWIN[i]),kin=sst(a,a+1,t),kout=sst(b-1,b,t),k=kin*(1-kout);
+    c.position.lerpVectors(E,B,k);const walking=(t<a+1||t>b-1),dir=(t<a+1?B.clone().sub(E):E.clone().sub(B));
+    c.rotation.y=walking?Math.atan2(dir.x,dir.z):Math.atan2(HOME.x-B.x,(HOME.z-2)-B.z);const sw=walking?Math.sin(performance.now()/140+i)*.5:0;
+    c.position.y=walking?Math.abs(sw)*.06:0;c.userData.arms.forEach((ar,j)=>{ar.rotation.x=(j?sw:-sw);ar.rotation.z=0;});
+    if(i===6&&!walking){c.userData.arms[1].rotation.z=-2.7;}});   // wing walker holds an arm up during the push
   // docking guidance board
   if(t<3){const dist=(p.z-ho.p.z)*1.32;dist>14?vdDraw('A319',`${dist.toFixed(0)} m`,'#ffd34d',1-dist/95):vdDraw('A319',`${dist.toFixed(1)} m`,'#ffd34d',1-dist/95);}
   else if(t<3.5)vdDraw('STOP','','#ff3b30');else if(t<5.5)vdDraw('OK','CHOCKS ON','#38e07b');else if(t<35)vdDraw('CT2','ON BLOCK','#38e07b');
   else if(t<41)vdDraw('PUSH','APPROVED','#ffd34d');else vdDraw('STAND','FREE','#7ab8ff');
   return t;}
+
+/* ================= rolling wheels and front-wheel steering ================= */
+const _wp=new V(),_wq=new THREE.Quaternion(),_wf=new V();
+const rollers=()=>[...svc.map(s=>s.g),...bagCarts,...train.children,pushTug,P2.g];
+function rollUpdate(){for(const g of rollers()){const W_=g.userData.wheels;if(!W_||!g.visible)continue;g.getWorldPosition(_wp);g.getWorldQuaternion(_wq);_wf.set(0,0,-1).applyQuaternion(_wq);const hd=Math.atan2(-_wf.x,-_wf.z);
+    const u=g.userData;if(!u.wp){u.wp=_wp.clone();u.hd=hd;u.steer=0;continue;}
+    const dx=_wp.x-u.wp.x,dz=_wp.z-u.wp.z,jump=Math.hypot(dx,dz)>6;const ds=jump?0:dx*_wf.x+dz*_wf.z;let dh=hd-u.hd;dh=Math.atan2(Math.sin(dh),Math.cos(dh));
+    if(!jump&&Math.abs(ds)>1e-4){const tgt=clamp(Math.atan(dh/ds*(u.wb||2.5)),-.6,.6);u.steer+=(tgt-u.steer)*.25;}else u.steer*=.9;
+    for(const w of W_){w.m.rotation.order='YXZ';w.m.rotation.x-=ds/w.r;w.m.rotation.y=w.front?u.steer*(ds<0?-1:1)*(ds<0?-1:1):0;}
+    u.wp.copy(_wp);u.hd=hd;}}
+
+/* ================= passengers walking through the jet bridge ================= */
+const PAXN=16,paxGeo=THREE.BufferGeometryUtils?THREE.BufferGeometryUtils.mergeBufferGeometries([new THREE.CylinderGeometry(.2,.17,1.05,8).translate(0,.53,0),new THREE.SphereGeometry(.14,10,8).translate(0,1.24,0)].map(g=>g.toNonIndexed())):new THREE.CylinderGeometry(.2,.17,1.3,8).translate(0,.65,0);
+const paxM=new THREE.InstancedMesh(paxGeo,M(4,'pax',{color:0xffffff,roughness:.8}),PAXN);paxM.userData={layer:4,name:'旅客'};paxM.castShadow=false;LG[4].add(paxM);
+{const cols=[0x2d3e5c,0x7a3b3b,0x3e5f43,0x8a7a5c,0x4a4a52,0xb8b2a6,0x5d4a7a,0x2f2f33];const c=new THREE.Color();for(let i=0;i<PAXN;i++){c.setHex(cols[i%cols.length]);paxM.setColorAt(i,c);}}
+const bp=bridges[1],paxPath=new THREE.CatmullRomCurve3([
+  bp.door.clone().setY(bp.sill+.02),bp.cabC.clone().setY(bp.sill+.02),bp.b.clone().setY(bp.yC-1.5+.08),
+  bp.a.clone().lerp(bp.b,.5).setY(lerp(bp.yR,bp.yC,.5)-1.45+.12),bp.a.clone().addScaledVector(bp.dir,.08*bp.L).setY(lerp(bp.yR,bp.yC,.08)-1.45+.12),bp.a.clone().setY(bp.yR-1.45+.12)],false,'centripetal');
+const paxLen=paxPath.getLength(),_m4=new THREE.Matrix4(),_q=new THREE.Quaternion(),_s=new V(1,1,1);
+function paxUpdate(t){const deb=t>6&&t<13,brd=t>21&&t<35;paxM.visible=deb||brd;if(!paxM.visible)return;
+  const now=performance.now()/1000,share=deb?clamp((t-6)/1.2,0,1)*clamp((13-t)/1.2,0,1):clamp((t-21)/1.2,0,1)*clamp((35-t)/1.2,0,1);
+  for(let i=0;i<PAXN;i++){let u=((now*1.25/paxLen)+i/PAXN)%1;if(brd)u=1-u;const on=i/PAXN<share*1.05;
+    const p=paxPath.getPointAt(u),tg=paxPath.getTangentAt(u);if(brd)tg.negate();_q.setFromAxisAngle(new V(0,1,0),Math.atan2(tg.x,tg.z));
+    p.y+=Math.abs(Math.sin(now*7+i))*.04;_s.setScalar(on?1:0);_m4.compose(p,_q,_s);paxM.setMatrixAt(i,_m4);}
+  paxM.instanceMatrix.needsUpdate=true;}
 
 /* ================= turnaround panel ================= */
 const gWrap=$('gantt'),gRows=$('gRows');
@@ -929,7 +968,7 @@ function loop(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
   planes.forEach((p,i)=>{const live=i===1&&(TA.t<4.2||TA.t>36.8);   // parked jets on the bridge keep the beacon off
   const on=live&&((t+i*.37)%1.1)<.12;p.beacon.material.color.setHex(on?0xff3030:0x5a0d0d);p.beacon.scale.setScalar(on?1.6:1);});
   trainStep(traffic&&!reduceMotion?dt:0);
-  tourTick(dt);const tt=taUpdate(dt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
+  tourTick(dt);const tt=taUpdate(dt);rollUpdate();paxUpdate(tt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
   planes.forEach(p=>{if(p.fans){p.ang=(p.ang||0)+dt*30*(p.rpm||0);p.fans.forEach(f=>f.rotation.z=p.ang);}});
   applyTod(dt);
   controls.update();renderer.render(scene,camera);
