@@ -425,7 +425,7 @@ part(barrelBridge,4,NZ,1.6);
 // ratchet (大钢轮) on the barrel arbor, crown wheel (小钢轮), click
 const ratchet=asm(new V(B.x,B.y,-.565));
 {ratchet.add(mk(wheelGeo(40,.02,.04,{prof:'ratchet',hole:.02}),4,'satin','大钢轮 · 40 齿'));
- const sun=mk(cylZ(.3,-.022,-.024,48),4,'goldSun','大钢轮 · 太阳纹');ratchet.add(sun);
+ const sun=mk(cylZ(.3,-.031,-.034,48),4,'goldSun','大钢轮 · 太阳纹');ratchet.add(sun);
  ratchet.add(mk(cylZ(.095,-.02,.43,24),4,'steel','发条轴'));screw(ratchet,4,0,0,-.02,-1);}
 part(ratchet,4,NZ,2.1);
 const CW=new V(B.x+Math.cos(ARMS[0])*.62,B.y+Math.sin(ARMS[0])*.62,-.565);
