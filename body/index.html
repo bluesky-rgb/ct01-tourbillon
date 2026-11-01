@@ -1,0 +1,907 @@
+<title>人体 · 由代码生成</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<style>
+/* Layout: full-bleed 3D stage; title top-left, vital-signs monitor top-right, control dock along the bottom */
+:root{
+  --bg:#0c0d0f; --fg:#ecebe6; --muted:#9a968e; --line:rgba(236,235,230,.12); --panel:rgba(16,17,19,.78);
+  --accent:#e0795b; --art:#e2483f; --vein:#5b7fe0; --nerve:#e6c15a; --ok:#58d39a;
+  --f-display:"Cormorant Garamond","Songti SC","Noto Serif SC",serif;
+  --f-body:"PingFang SC","Noto Sans SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--f-body);overflow:hidden;-webkit-tap-highlight-color:transparent}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none;
+  padding:calc(env(safe-area-inset-top,0px) + 16px) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+.brand{pointer-events:auto;max-width:420px}
+.brand .k{font:500 11px/1 var(--f-mono);letter-spacing:.22em;color:var(--accent);text-transform:uppercase}
+.brand h1{font:500 clamp(28px,4.2vw,44px)/1.05 var(--f-display);margin:6px 0 4px;letter-spacing:.01em}
+.brand h1 i{font-style:italic;color:var(--muted);font-weight:500}
+.brand p{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+.brand .stats{font:12px/1.4 var(--f-mono);color:var(--muted);margin-top:6px}
+
+.vitals{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px 8px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);width:240px}
+.vitals .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.vitals .big{font:500 26px/1 var(--f-mono);color:var(--ok)}
+.vitals .big small{font-size:11px;color:var(--muted);margin-left:3px}
+.vitals .lab{font-size:11px;color:var(--muted)}
+.vitals canvas{display:block;width:100%;height:54px;margin:6px 0 4px}
+.vitals .mini{display:flex;gap:14px;font:12px/1.3 var(--f-mono);color:var(--fg)}
+.vitals .mini span{color:var(--muted);font-family:var(--f-body);margin-right:4px}
+
+.dock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);width:min(980px,calc(100% - 24px));
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:center}
+.grp{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.grp .gl{font-size:11px;color:var(--muted);margin-right:4px;letter-spacing:.06em}
+.chip{height:32px;padding:0 11px;border-radius:999px;border:1px solid var(--line);font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--muted);transition:background .2s,color .2s,border-color .2s}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.9}
+.chip[aria-pressed="true"]{color:var(--fg);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22)}
+.chip:hover{color:var(--fg)}
+.sep{width:1px;height:22px;background:var(--line)}
+.cta{height:36px;padding:0 16px;border-radius:999px;background:var(--accent);color:#1a0f0b;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:8px}
+.cta svg{width:14px;height:14px}
+
+/* guided tour caption */
+.cap{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 86px);width:min(720px,calc(100% - 24px));
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px 10px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:none}
+.cap.on{display:block}
+.cap .h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
+.cap .t{font:500 20px/1.2 var(--f-display);letter-spacing:.02em}
+.cap .n{font:12px var(--f-mono);color:var(--muted)}
+.cap p{margin:0;font-size:14px;line-height:1.65;color:#d8d5ce}
+.cap .ctl{display:flex;gap:6px;margin-top:8px;align-items:center}
+.cap .bar{flex:1;height:2px;background:var(--line);border-radius:2px;overflow:hidden}
+.cap .bar i{display:block;height:100%;width:0;background:var(--accent)}
+.cap .st{font:11px var(--f-mono);color:var(--muted)}
+
+/* click info */
+.info{position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 168px);width:260px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:none}
+.info.on{display:block}
+.info .t{font-size:16px;font-weight:600;margin-bottom:4px;display:flex;justify-content:space-between;gap:8px}
+.info .t button{color:var(--muted);font-size:18px;line-height:1}
+.info .s{font:11px var(--f-mono);color:var(--accent);letter-spacing:.1em;margin-bottom:6px}
+.info p{margin:0;font-size:13px;line-height:1.6;color:#d0cdc6}
+
+/* loader */
+.load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:var(--bg);transition:opacity .8s}
+.load.done{opacity:0;pointer-events:none}
+.load .t{font:500 26px var(--f-display);letter-spacing:.04em}
+.load .bar{width:220px;height:2px;background:var(--line);border-radius:2px;overflow:hidden}
+.load .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.load .s{font:12px var(--f-mono);color:var(--muted);height:16px}
+body.touring .dock{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(20px)}
+.dock{transition:opacity .4s,transform .4s}
+body.touring .cap{bottom:calc(env(safe-area-inset-bottom,0px) + 14px)}
+body.touring .brand p,body.touring .brand .stats{display:none}
+.lbl{position:fixed;left:0;top:0;font:500 12px/1 var(--f-body);color:var(--fg);letter-spacing:.08em;pointer-events:none;white-space:nowrap;transform:translate(-50%,0);opacity:0;transition:opacity .5s;text-shadow:0 1px 6px #000}
+.lbl.on{opacity:.9}
+.hint{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 14px);font-size:12px;color:var(--muted);pointer-events:none;opacity:0;transition:opacity .6s}
+
+@media (max-width:720px){
+  .brand h1 i{display:none}.hint{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 168px)}
+  body.touring .cap{bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
+  .brand p{display:none}.brand .stats{display:none}
+  .vitals{width:150px;padding:8px 10px 6px}.vitals canvas{height:34px}.vitals .big{font-size:20px}.vitals .mini{display:none}
+  .dock{gap:6px 8px;padding:8px}.chip{height:30px;padding:0 9px;font-size:12px}.grp .gl{display:none}.sep{display:none}
+  .cap{bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}.cap p{font-size:13px}
+  .info{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);left:12px;right:12px;width:auto}
+}
+</style>
+<div id="stage"></div>
+<header class="top">
+  <div class="brand">
+    <div class="k">Homo sapiens · 全身解剖</div>
+    <h1>人体 <i>— in motion</i></h1>
+    <p>皮肤、骨骼、肌肉、器官、血管与神经，全部由数学函数现场生成，并且在动：心脏按心率跳动，肺随呼吸起伏，血液在血管里流。</p>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="vitals" aria-label="生命体征">
+    <div class="row"><span class="lab">心率</span><span class="lab" id="vPhase">舒张期</span></div>
+    <div class="row"><span class="big" id="vHR">64<small>次/分</small></span></div>
+    <canvas id="ecg" width="440" height="108" aria-hidden="true"></canvas>
+    <div class="mini"><div><span>呼吸</span><b id="vRR">14</b>/分</div><div><span>步频</span><b id="vCad">0</b>/分</div></div>
+  </div>
+</header>
+<aside class="info" id="info" aria-live="polite"><div class="t"><span id="iT"></span><button id="iX" aria-label="关闭">×</button></div><div class="s" id="iS"></div><p id="iP"></p></aside>
+<section class="cap" id="cap" aria-live="polite">
+  <div class="h"><div class="t" id="cT"></div><div class="n" id="cN"></div></div>
+  <p id="cP"></p>
+  <div class="ctl"><button class="chip" id="cPrev" aria-label="上一段">‹</button><button class="chip" id="cPause">暂停</button><button class="chip" id="cNext" aria-label="下一段">›</button><div class="bar"><i id="cBar"></i></div><span class="st" id="cSnd"></span><button class="chip" id="cX">退出</button></div>
+</section>
+<nav class="dock" aria-label="控制">
+  <div class="grp" role="group" aria-label="图层"><span class="gl">图层</span>
+    <button class="chip" data-layer="skin" aria-pressed="true"><span class="dot" style="color:#d9a184"></span>皮肤</button>
+    <button class="chip" data-layer="muscle" aria-pressed="false"><span class="dot" style="color:#c8463c"></span>肌肉</button>
+    <button class="chip" data-layer="bone" aria-pressed="true"><span class="dot" style="color:#e9e0cc"></span>骨骼</button>
+    <button class="chip" data-layer="organ" aria-pressed="true"><span class="dot" style="color:#e39a8c"></span>器官</button>
+    <button class="chip" data-layer="vessel" aria-pressed="true"><span class="dot" style="color:var(--art)"></span>血管</button>
+    <button class="chip" data-layer="nerve" aria-pressed="false"><span class="dot" style="color:var(--nerve)"></span>神经</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp" role="group" aria-label="状态"><span class="gl">状态</span>
+    <button class="chip" data-mode="rest" aria-pressed="false">静息</button><button class="chip" data-mode="walk" aria-pressed="true">行走</button><button class="chip" data-mode="run" aria-pressed="false">跑步</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp" role="group" aria-label="视图">
+    <button class="chip" id="bX" aria-pressed="true">透视皮肤</button><button class="chip" id="bE" aria-pressed="false">五层拆开</button><button class="chip" id="bS" aria-pressed="false" aria-label="声音">声音 关</button>
+  </div>
+  <button class="cta" id="bTour"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>一键讲解</button>
+</nav>
+<div id="lbls"></div><div class="hint" id="hint">拖动旋转 · 双指缩放 · 点击任意部位查看</div>
+<div class="load" id="load"><div class="t">正在用代码生成人体</div><div class="bar"><i id="lBar"></i></div><div class="s" id="lS">准备中</div></div>
+<script id="gen">
+/* ================= math helpers ================= */
+const hyp=(a,b,c)=>Math.sqrt(a*a+b*b+c*c),V=THREE.Vector3,PI=Math.PI,TAU=PI*2,clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t,D2R=PI/180;
+const sst=(a,b,t)=>{const k=clamp((t-a)/(b-a),0,1);return k*k*(3-2*k);};
+
+/* ================= signed distance primitives (metres, y up, figure faces +z) ================= */
+// every primitive: {f(x,y,z) → distance, bb:[x0,y0,z0,x1,y1,z1], bone}
+function rotM(rx,ry,rz){const e=new THREE.Euler(rx*D2R,ry*D2R,rz*D2R),m=new THREE.Matrix4().makeRotationFromEuler(e).invert().elements;return [m[0],m[4],m[8],m[1],m[5],m[9],m[2],m[6],m[10]];}
+function sph(c,r,bone){const [cx,cy,cz]=c;return {f:(x,y,z)=>hyp(x-cx,y-cy,z-cz)-r,bb:[cx-r,cy-r,cz-r,cx+r,cy+r,cz+r],bone};}
+function ell(c,R,bone,rot){const [cx,cy,cz]=c,[a,b,d]=R,m=rot?rotM(...rot):null,M=Math.max(a,b,d),ia=1/a,ib=1/b,id=1/d,ia2=ia*ia,ib2=ib*ib,id2=id*id;
+  return {f:(x,y,z)=>{let px=x-cx,py=y-cy,pz=z-cz;if(m){const qx=m[0]*px+m[1]*py+m[2]*pz,qy=m[3]*px+m[4]*py+m[5]*pz,qz=m[6]*px+m[7]*py+m[8]*pz;px=qx;py=qy;pz=qz;}
+      const k0=hyp(px*ia,py*ib,pz*id),k1=hyp(px*ia2,py*ib2,pz*id2);return k1<1e-9?-Math.min(a,b,d):k0*(k0-1)/k1;},bb:[cx-M,cy-M,cz-M,cx+M,cy+M,cz+M],bone};}
+// round cone a→b with radii ra→rb; optional flatten (scale the cross-section along a world axis)
+function cap(a,b,ra,rb,bone,flat){const [ax,ay,az]=a,[bx,by,bz]=b,dx=bx-ax,dy=by-ay,dz=bz-az,l2=dx*dx+dy*dy+dz*dz,R=Math.max(ra,rb);rb=rb==null?ra:rb;
+  const fx=flat?flat[0]:1,fy=flat?flat[1]:1,fz=flat?flat[2]:1,mf=Math.min(fx,fy,fz);
+  return {f:(x,y,z)=>{const px=x-ax,py=y-ay,pz=z-az;const t=clamp((px*dx+py*dy+pz*dz)/l2,0,1);return flat?(hyp((px-dx*t)/fx,(py-dy*t)/fy,(pz-dz*t)/fz)-(ra+(rb-ra)*t))*mf:hyp(px-dx*t,py-dy*t,pz-dz*t)-(ra+(rb-ra)*t);},
+    bb:[Math.min(ax,bx)-R,Math.min(ay,by)-R,Math.min(az,bz)-R,Math.max(ax,bx)+R,Math.max(ay,by)+R,Math.max(az,bz)+R],bone};}
+// chain of round cones through points with radii
+function chain(pts,rs,bone,flat){return pts.slice(1).map((p,i)=>cap(pts[i],p,rs[i],rs[i+1],bone,flat));}
+const smin=(a,b,k)=>{const h=Math.max(k-Math.abs(a-b),0)/k;return Math.min(a,b)-h*h*k*.25;};
+function bbDist(bb,x,y,z){let dx=bb[0]-x,t=x-bb[3];if(t>dx)dx=t;if(dx<0)dx=0;let dy=bb[1]-y;t=y-bb[4];if(t>dy)dy=t;if(dy<0)dy=0;let dz=bb[2]-z;t=z-bb[5];if(t>dz)dz=t;if(dz<0)dz=0;return Math.sqrt(dx*dx+dy*dy+dz*dz);}
+// smooth union of primitives minus smooth-subtracted ones; skips primitives whose box is far away
+// prims are bucketed on a coarse grid so each lookup only touches the few that can matter (within MARGIN)
+const MARGIN=.05,CELL=.035;
+function shape(add,k=.012,sub=[],ks=.006,extra){
+  const bb=add.reduce((b,p)=>[Math.min(b[0],p.bb[0]),Math.min(b[1],p.bb[1]),Math.min(b[2],p.bb[2]),Math.max(b[3],p.bb[3]),Math.max(b[4],p.bb[4]),Math.max(b[5],p.bb[5])],[1e9,1e9,1e9,-1e9,-1e9,-1e9]);
+  const gx=bb[0]-MARGIN,gy=bb[1]-MARGIN,gz=bb[2]-MARGIN,nx=Math.ceil((bb[3]-bb[0]+2*MARGIN)/CELL)+1,ny=Math.ceil((bb[4]-bb[1]+2*MARGIN)/CELL)+1,nz=Math.ceil((bb[5]-bb[2]+2*MARGIN)/CELL)+1;
+  const BA=new Array(nx*ny*nz),BS=new Array(nx*ny*nz);
+  const fill=(list,arr,m)=>list.forEach(p=>{const b=p.bb;const i0=Math.max(0,Math.floor((b[0]-m-gx)/CELL)),i1=Math.min(nx-1,Math.floor((b[3]+m-gx)/CELL)),j0=Math.max(0,Math.floor((b[1]-m-gy)/CELL)),j1=Math.min(ny-1,Math.floor((b[4]+m-gy)/CELL)),k0=Math.max(0,Math.floor((b[2]-m-gz)/CELL)),k1=Math.min(nz-1,Math.floor((b[5]+m-gz)/CELL));
+    for(let kk=k0;kk<=k1;kk++)for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const c=i+nx*(j+ny*kk);(arr[c]||(arr[c]=[])).push(p);}});
+  fill(add,BA,MARGIN+k);fill(sub,BS,ks);
+  const f=(x,y,z)=>{const i=Math.floor((x-gx)/CELL),j=Math.floor((y-gy)/CELL),kk=Math.floor((z-gz)/CELL);
+    if(i<0||j<0||kk<0||i>=nx||j>=ny||kk>=nz){const d=Math.max(MARGIN,bbDist(bb,x,y,z));return extra?extra(d,x,y,z):d;}const c=i+nx*(j+ny*kk),L=BA[c];let d=MARGIN;
+    if(L)for(const p of L){if(bbDist(p.bb,x,y,z)>d+k)continue;d=smin(d,p.f(x,y,z),k);}
+    const Ls=BS[c];if(Ls)for(const p of Ls){if(bbDist(p.bb,x,y,z)>ks-d)continue;const s=p.f(x,y,z);const h=Math.max(ks-Math.abs(-s-d),0)/ks;d=Math.max(d,-s)+h*h*ks*.25;}
+    return extra?extra(d,x,y,z):d;};
+  return {add,sub,f,bb};}
+
+/* ================= surface nets mesher with sparse block evaluation ================= */
+const EDGES=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+function mesh(S,h,pad=.01){const f=S.f,b=S.bb,x0=b[0]-pad-h,y0=b[1]-pad-h,z0=b[2]-pad-h;
+  const nx=Math.ceil((b[3]-b[0]+2*pad)/h)+3,ny=Math.ceil((b[4]-b[1]+2*pad)/h)+3,nz=Math.ceil((b[5]-b[2]+2*pad)/h)+3;
+  const G=new Float32Array(nx*ny*nz),I=(i,j,k)=>i+nx*(j+ny*k),B=8;
+  // pass 1: even lattice (2h), whole blocks far from the surface take a constant sign
+  for(let bk=0;bk<nz;bk+=B)for(let bj=0;bj<ny;bj+=B)for(let bi=0;bi<nx;bi+=B){
+    const i1=Math.min(bi+B,nx-1),j1=Math.min(bj+B,ny-1),k1=Math.min(bk+B,nz-1);
+    const cx=x0+(bi+i1)*.5*h,cy=y0+(bj+j1)*.5*h,cz=z0+(bk+k1)*.5*h,R=Math.sqrt((i1-bi)**2+(j1-bj)**2+(k1-bk)**2)*.5*h,dc=f(cx,cy,cz);
+    const far=Math.abs(dc)>R*1.3+h,v=dc>0?1:-1;
+    for(let k=bk;k<=k1;k+=2)for(let j=bj;j<=j1;j+=2)for(let i=bi;i<=i1;i+=2)G[I(i,j,k)]=far?v:f(x0+i*h,y0+j*h,z0+k*h);}
+  // pass 2: odd points interpolate from the even lattice unless they are close to the surface
+  const T=2.6*h;
+  for(let k=0;k<nz;k++){const ka=k&~1,kb=Math.min(ka+2,nz-1-((nz-1)&1)),tk=k&1?.5:0;
+    for(let j=0;j<ny;j++){const ja=j&~1,jb=Math.min(ja+2,ny-1-((ny-1)&1)),tj=j&1?.5:0;
+      for(let i=0;i<nx;i++){if(!((i|j|k)&1))continue;const ia=i&~1,ib=Math.min(ia+2,nx-1-((nx-1)&1)),ti=i&1?.5:0;
+        const c00=G[I(ia,ja,ka)]*(1-ti)+G[I(ib,ja,ka)]*ti,c10=G[I(ia,jb,ka)]*(1-ti)+G[I(ib,jb,ka)]*ti,c01=G[I(ia,ja,kb)]*(1-ti)+G[I(ib,ja,kb)]*ti,c11=G[I(ia,jb,kb)]*(1-ti)+G[I(ib,jb,kb)]*ti;
+        const e=(c00*(1-tj)+c10*tj)*(1-tk)+(c01*(1-tj)+c11*tj)*tk;
+        G[I(i,j,k)]=Math.abs(e)>T?e:f(x0+i*h,y0+j*h,z0+k*h);}}}
+  const CV=new Int32Array((nx-1)*(ny-1)*(nz-1)).fill(-1),C=(i,j,k)=>i+(nx-1)*(j+(ny-1)*k),pos=[];const v=new Float32Array(8);
+  for(let k=0;k<nz-1;k++)for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){let m=0;
+    for(let c=0;c<8;c++){v[c]=G[I(i+(c&1),j+((c>>1)&1),k+((c>>2)&1))];if(v[c]<0)m|=1<<c;}
+    if(m===0||m===255)continue;let sx=0,sy=0,sz=0,n=0;
+    for(const [a,bb] of EDGES){const va=v[a],vb=v[bb];if((va<0)===(vb<0))continue;const t=va/(va-vb);
+      sx+=(a&1)+((bb&1)-(a&1))*t;sy+=((a>>1)&1)+(((bb>>1)&1)-((a>>1)&1))*t;sz+=((a>>2)&1)+(((bb>>2)&1)-((a>>2)&1))*t;n++;}
+    CV[C(i,j,k)]=pos.length/3;pos.push(x0+(i+sx/n)*h,y0+(j+sy/n)*h,z0+(k+sz/n)*h);}
+  const idx=[];const quad=(a,b,c,d,flip)=>{if(a<0||b<0||c<0||d<0)return;flip?idx.push(a,b,c,a,c,d):idx.push(a,c,b,a,d,c);};
+  for(let k=1;k<nz-1;k++)for(let j=1;j<ny-1;j++)for(let i=1;i<nx-1;i++){const g=G[I(i,j,k)],ins=g<0;
+    if(i<nx-1&&(G[I(i+1,j,k)]<0)!==ins)quad(CV[C(i,j-1,k-1)],CV[C(i,j,k-1)],CV[C(i,j,k)],CV[C(i,j-1,k)],ins);
+    if(j<ny-1&&(G[I(i,j+1,k)]<0)!==ins)quad(CV[C(i-1,j,k-1)],CV[C(i-1,j,k)],CV[C(i,j,k)],CV[C(i,j,k-1)],ins);
+    if(k<nz-1&&(G[I(i,j,k+1)]<0)!==ins)quad(CV[C(i-1,j-1,k)],CV[C(i,j-1,k)],CV[C(i,j,k)],CV[C(i-1,j,k)],ins);}
+  // one relaxation pass toward the true surface, then gradient normals
+  const P=new Float32Array(pos),N=new Float32Array(P.length),e=h*.35;
+  for(let q=0;q<P.length;q+=3){let x=P[q],y=P[q+1],z=P[q+2];
+    for(let it=0;it<1;it++){const d=f(x,y,z),gx=f(x+e,y,z)-f(x-e,y,z),gy=f(x,y+e,z)-f(x,y-e,z),gz=f(x,y,z+e)-f(x,y,z-e),gl=Math.hypot(gx,gy,gz)||1;
+      const s=clamp(d,-h*.5,h*.5);x-=gx/gl*s;y-=gy/gl*s;z-=gz/gl*s;if(it===0){N[q]=gx/gl;N[q+1]=gy/gl;N[q+2]=gz/gl;}}
+    P[q]=x;P[q+1]=y;P[q+2]=z;}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(P,3));geo.setAttribute('normal',new THREE.BufferAttribute(N,3));
+  geo.setIndex(P.length/3>65535?new THREE.Uint32BufferAttribute(idx,1):new THREE.Uint16BufferAttribute(idx,1));geo.computeBoundingSphere();return geo;}
+
+/* ================= rig: joint positions in the rest pose (A-pose, palms toward the thighs) ================= */
+const J={hips:[0,.96,0],spine:[0,1.07,-.01],chest:[0,1.25,-.02],neck:[0,1.47,-.03],head:[0,1.56,-.02],top:[0,1.75,-.01],
+  clavL:[.02,1.43,.02],armL:[.185,1.42,-.02],foreL:[.235,1.14,-.04],handL:[.268,.895,-.01],tipL:[.285,.71,0],
+  thighL:[.09,.92,0],shinL:[.10,.51,.01],footL:[.105,.085,-.03],toeL:[.115,.0,.15]};
+['clav','arm','fore','hand','tip','thigh','shin','foot','toe'].forEach(n=>{const a=J[n+'L'];J[n+'R']=[-a[0],a[1],a[2]];});
+const BONES=[['hips',null],['spine','hips'],['chest','spine'],['neck','chest'],['head','neck'],
+  ['clavL','chest'],['armL','clavL'],['foreL','armL'],['handL','foreL'],['clavR','chest'],['armR','clavR'],['foreR','armR'],['handR','foreR'],
+  ['thighL','hips'],['shinL','thighL'],['footL','shinL'],['thighR','hips'],['shinR','thighR'],['footR','shinR']];
+const BI={};BONES.forEach(([n],i)=>BI[n]=i);
+const mirror=(p)=>[-p[0],p[1],p[2]];
+const sideBone=(b,s)=>s<0?b.replace(/L$/,'R'):b;
+
+/* ================= skin: smooth union of body masses, each tagged with the bone that carries it ================= */
+function both(fn){return [...(fn(1)||[]),...(fn(-1)||[])];}
+const X=(s,p)=>[s*p[0],p[1],p[2]];
+function skinShape(cover=[]){
+  const A=[];
+  // torso
+  A.push(ell([0,1.31,-.005],[.152,.17,.112],'chest'),ell([0,1.405,-.008],[.15,.07,.09],'chest'),ell([0,1.205,.012],[.128,.085,.096],'chest'),ell([0,1.12,0],[.128,.13,.09],'spine'),ell([0,1.055,.025],[.112,.08,.072],'spine'),
+    ell([0,.955,-.005],[.162,.1,.104],'hips'),cap([0,1.42,-.03],[0,1.59,-.025],.056,.049,'neck'),cap([0,1.44,.0],[0,1.55,.025],.038,.034,'neck'));
+  A.push(...both(s=>[cap(X(s,[.032,.97,-.06]),X(s,[.036,1.34,-.08]),.03,.028,'spine'),ell(X(s,[.075,1.335,.06]),[.07,.055,.04],'chest'),ell(X(s,[.068,.9,-.06]),[.074,.08,.064],'hips'),
+    cap(X(s,[.0,1.475,-.05]),X(s,[.15,1.43,-.04]),.044,.034,'chest'),
+    // arm
+    ell(X(s,[.19,1.39,-.015]),[.05,.07,.05],'arm'+(s>0?'L':'R')),cap(J[s>0?'armL':'armR'],J[s>0?'foreL':'foreR'],.044,.035,s>0?'armL':'armR'),
+    ell(X(s,[.214,1.27,.0]),[.031,.062,.032],s>0?'armL':'armR'),cap(J[s>0?'foreL':'foreR'],J[s>0?'handL':'handR'],.036,.024,s>0?'foreL':'foreR'),
+    ell(X(s,[.244,1.07,-.035]),[.034,.065,.034],s>0?'foreL':'foreR'),
+    // hand: palm, four fingers, thumb
+    ell(X(s,[.276,.842,-.005]),[.015,.044,.039],s>0?'handL':'handR'),
+    ...[[.026,.074],[.009,.083],[-.009,.078],[-.025,.062]].map(([z,l])=>cap(X(s,[.278,.805,z]),X(s,[.284,.805-l,z*1.08]),.0085,.0068,s>0?'handL':'handR')),
+    ...chain([X(s,[.27,.865,.025]),X(s,[.266,.825,.055]),X(s,[.26,.792,.064])],[.011,.0088,.0075],s>0?'handL':'handR'),
+    // leg
+    cap(J[s>0?'thighL':'thighR'],J[s>0?'shinL':'shinR'],.084,.05,s>0?'thighL':'thighR'),ell(X(s,[.105,.72,.028]),[.058,.13,.055],s>0?'thighL':'thighR'),
+    ell(X(s,[.06,.79,-.005]),[.045,.1,.05],s>0?'thighL':'thighR'),sph(X(s,[.10,.51,.012]),.046,s>0?'shinL':'shinR'),
+    cap(J[s>0?'shinL':'shinR'],J[s>0?'footL':'footR'],.047,.03,s>0?'shinL':'shinR'),ell(X(s,[.105,.36,-.033]),[.044,.09,.044],s>0?'shinL':'shinR'),
+    sph(X(s,[.105,.09,-.03]),.031,s>0?'footL':'footR'),sph(X(s,[.105,.042,-.055]),.034,s>0?'footL':'footR'),
+    cap(X(s,[.105,.05,-.04]),X(s,[.112,.03,.1]),.034,.028,s>0?'footL':'footR',[1,.8,1]),ell(X(s,[.115,.022,.128]),[.044,.019,.042],s>0?'footL':'footR')]));
+  // head: its own tighter blend so the face keeps its planes
+  const H=[ell([0,1.672,-.012],[.074,.088,.094],'head'),ell([0,1.618,.036],[.058,.072,.06],'head'),ell([0,1.577,.034],[.048,.038,.048],'head'),
+    ell([0,1.551,.062],[.02,.016,.016],'head'),ell([0,1.668,.068],[.055,.013,.02],'head'),...both(s=>[ell(X(s,[.045,1.628,.048]),[.02,.014,.02],'head')])];
+  const F=[cap([0,1.655,.084],[0,1.612,.101],.0055,.0095,'head'),sph([0,1.608,.097],.0105,'head'),
+    ell([0,1.582,.085],[.018,.0048,.007],'head'),ell([0,1.57,.083],[.015,.0052,.007],'head'),
+    ...both(s=>[ell(X(s,[.074,1.634,-.014]),[.007,.027,.016],'head'),sph(X(s,[.011,1.604,.09]),.0075,'head'),ell(X(s,[.032,1.646,.08]),[.015,.009,.007],'head')])];
+  const sub=both(s=>[ell(X(s,[.032,1.65,.088]),[.017,.013,.011],'head')]);
+  const cov=cover.length?shape(cover,.004):null;
+  const feat=shape(F,.006),head=shape(H,.022,sub,.007,(d,x,y,z)=>smin(d,feat.f(x,y,z),.007));
+  const S=shape(A,.026,[],.008,(d,x,y,z)=>{if(y>1.5)d=smin(d,head.f(x,y,z),.016);if(cov&&bbDist(cov.bb,x,y,z)<d+.01)d=smin(d,cov.f(x,y,z)-.0035,.012);return d;});S.parts=A.concat(H,F);S.bb[4]=Math.max(S.bb[4],head.bb[4]);S.bb[0]=Math.min(S.bb[0],head.bb[0]);S.bb[3]=Math.max(S.bb[3],head.bb[3]);S.bb[5]=Math.max(S.bb[5],head.bb[5]);return S;}
+
+/* per-vertex skin weights: soft-min over the masses' distances, grouped by bone, best four kept */
+function skinWeights(geo,parts,sigma=.011){const P=geo.attributes.position,n=P.count,si=new Uint16Array(n*4),sw=new Float32Array(n*4);
+  for(let v=0;v<n;v++){const x=P.getX(v),y=P.getY(v),z=P.getZ(v);let dmin=1e9;const ds=parts.map(p=>{const bd=bbDist(p.bb,x,y,z);if(bd>.12)return 1e9;const d=p.f(x,y,z);if(d<dmin)dmin=d;return d;});
+    const acc={};parts.forEach((p,i)=>{if(ds[i]>dmin+.06)return;const w=Math.exp(-(ds[i]-dmin)/sigma);acc[p.bone]=(acc[p.bone]||0)+w;});
+    const top=Object.entries(acc).sort((a,b)=>b[1]-a[1]).slice(0,4),tot=top.reduce((s,e)=>s+e[1],0);
+    top.forEach(([b,w],k)=>{si[v*4+k]=BI[b];sw[v*4+k]=w/tot;});}
+  geo.setAttribute('skinIndex',new THREE.BufferAttribute(si,4));geo.setAttribute('skinWeight',new THREE.BufferAttribute(sw,4));return geo;}
+
+/* weights for tubes that follow a path of [point, bone] pairs: blend between neighbouring points' bones */
+function pathWeights(geo,path,samplesU){const n=geo.attributes.position.count,si=new Uint16Array(n*4),sw=new Float32Array(n*4),uv=geo.attributes.uv;
+  // cumulative length of the path control points
+  const L=[0];for(let i=1;i<path.length;i++)L.push(L[i-1]+Math.hypot(path[i][0][0]-path[i-1][0][0],path[i][0][1]-path[i-1][0][1],path[i][0][2]-path[i-1][0][2]));const T=L[L.length-1]||1;
+  for(let v=0;v<n;v++){const d=uv.getX(v)*T;let i=0;while(i<path.length-2&&L[i+1]<d)i++;const t=clamp((d-L[i])/((L[i+1]-L[i])||1),0,1);
+    const a=path[i][1],b=path[i+1][1];if(a===b){si[v*4]=BI[a];sw[v*4]=1;}else{si[v*4]=BI[a];sw[v*4]=1-t;si[v*4+1]=BI[b];sw[v*4+1]=t;}}
+  geo.setAttribute('skinIndex',new THREE.BufferAttribute(si,4));geo.setAttribute('skinWeight',new THREE.BufferAttribute(sw,4));return geo;}
+
+/* ================= skeleton: each bone is its own signed-distance model, carried by one rig bone ================= */
+// returns [{key, bone, shape, h}] — meshes are built later at resolution h
+function skeletonParts(){const out=[],add=(key,bone,S,h=.0028)=>out.push({key,bone,S,h});
+  // skull: cranium, face, orbits and nasal opening cut out, cheek arches; mandible separately
+  add('skull','head',shape([ell([0,1.662,-.016],[.073,.087,.095]),ell([0,1.612,.035],[.05,.05,.05]),ell([0,1.596,.05],[.042,.03,.038]),
+      cap([-.04,1.663,.073],[.04,1.663,.073],.01,.01),...both(s=>[cap(X(s,[.044,1.62,.058]),X(s,[.068,1.618,.0]),.008,.007),sph(X(s,[.043,1.622,.062]),.013)])],.01,
+    [...both(s=>[sph(X(s,[.031,1.643,.083]),.019)]),ell([0,1.607,.088],[.011,.018,.02])],.004),.0026);
+  add('teeth','head',shape([ell([0,1.578,.066],[.029,.009,.021])],.004,[ell([0,1.578,.058],[.024,.02,.017])],.003),.002);
+  add('mandible','head',shape([...both(s=>[cap(X(s,[.06,1.625,-.006]),X(s,[.058,1.57,.0]),.009,.011),cap(X(s,[.058,1.57,.0]),X(s,[.035,1.55,.05]),.011,.009)]),cap([-.035,1.55,.05],[.035,1.55,.05],.009,.009),sph([0,1.548,.065],.013)],.01),.0026);
+  // spine: 7 cervical, 12 thoracic, 5 lumbar along an S-curve; sacrum with the pelvis
+  const spineCurve=new THREE.CatmullRomCurve3([[0,.99,-.066],[0,1.06,-.038],[0,1.15,-.04],[0,1.27,-.06],[0,1.39,-.058],[0,1.46,-.045],[0,1.545,-.034]].map(p=>new V(...p)));
+  const vt=[];for(let i=0;i<24;i++){const u=1-i/23,p=spineCurve.getPointAt(.02+u*.96),t=spineCurve.getTangentAt(.02+u*.96);
+    const kind=i<7?'c':i<19?'t':'l',r=kind==='c'?.0105:kind==='t'?.0135+.0035*(i-7)/11:.019+.002*(i-19)/4;
+    const bone=p.y>1.43?'neck':p.y>1.16?'chest':'spine';
+    const body=ell([p.x,p.y,p.z],[r,r*.62,r*.85],null,[Math.atan2(t.z,t.y)/D2R,0,0]);
+    const sp=kind==='c'?.016:kind==='t'?.024:.022,dn=kind==='t'?.018:.006;
+    const parts=[body,cap([0,p.y,p.z-r*.6],[0,p.y-dn,p.z-r-sp],r*.32,r*.22),...both(s=>[cap(X(s,[r*.3,p.y,p.z-r*.7]),X(s,[r*(kind==='l'?2.1:1.6),p.y+.002,p.z-r*.9]),r*.22,r*.16)])];
+    vt.push({bone,parts,y:p.y,p,r});}
+  ['neck','chest','spine'].forEach(b=>{const P=vt.filter(v=>v.bone===b).flatMap(v=>v.parts);add('vert_'+b,b,shape(P,.003),.0022);});
+  out.spine=vt;
+  // pelvis: iliac wings, sacrum, pubis and ischium rings, hip sockets
+  add('pelvis','hips',shape([ell([0,.965,-.085],[.04,.06,.022],null,[-25,0,0]),
+    ...both(s=>[ell(X(s,[.085,1.0,-.025]),[.058,.06,.011],null,[0,s*-38,s*-12]),sph(X(s,[.085,.925,.0]),.028),cap(X(s,[.085,.92,.0]),X(s,[.015,.885,.055]),.012,.01),
+      cap(X(s,[.085,.92,.0]),X(s,[.065,.855,-.035]),.014,.012),cap(X(s,[.065,.855,-.035]),X(s,[.02,.87,.04]),.01,.008),cap(X(s,[.12,1.04,.03]),X(s,[.06,1.02,-.075]),.01,.009)])],.012,
+    both(s=>[sph(X(s,[.09,.92,.0]),.022)]),.004),.003);
+  // ribs, sternum and costal cartilage are tubes (built separately); clavicle and scapula here
+  both(s=>{const S=s>0?'L':'R';
+    add('clav'+S,'chest',shape(chain([X(s,[.02,1.43,.055]),X(s,[.08,1.445,.06]),X(s,[.14,1.45,.01]),X(s,[.17,1.448,-.02])],[.0075,.007,.0065,.008])),.0022);
+    add('scap'+S,'chest',shape([ell(X(s,[.092,1.35,-.069]),[.044,.064,.005],null,[8,s*-26,s*6]),cap(X(s,[.07,1.4,-.083]),X(s,[.165,1.44,-.035]),.005,.006),sph(X(s,[.165,1.41,-.035]),.016)],.006,[sph(X(s,[.18,1.415,-.02]),.022)],.003),.0024);
+    // arm
+    add('humerus'+S,'arm'+S,shape([sph(X(s,[.18,1.418,-.022]),.024),cap(X(s,[.19,1.39,-.025]),X(s,[.232,1.16,-.04]),.0125,.011),cap(X(s,[.215,1.148,-.04]),X(s,[.257,1.143,-.042]),.012,.011)],.012),.0024);
+    add('ulna'+S,'fore'+S,shape([sph(X(s,[.232,1.15,-.06]),.012),cap(X(s,[.234,1.14,-.058]),X(s,[.272,.905,-.03]),.0085,.0055)],.008),.0022);
+    add('radius'+S,'fore'+S,shape([sph(X(s,[.25,1.132,-.03]),.01),cap(X(s,[.25,1.13,-.03]),X(s,[.268,.91,.008]),.0062,.0095)],.008),.0022);
+    // hand: carpals, metacarpals, phalanges, thumb
+    const hp=[ell(X(s,[.272,.885,-.008]),[.011,.014,.022])];
+    [[.024,.074],[.008,.083],[-.009,.078],[-.024,.062]].forEach(([z,l])=>{const a=X(s,[.275,.873,z*.7]),b=X(s,[.279,.808,z]);hp.push(cap(a,b,.0048,.004),sph(b,.0055));
+      const segs=[.42,.33,.25];let y=.808,acc=0;segs.forEach((f,k)=>{const y2=y-l*f;hp.push(cap(X(s,[.279+.002*k,y-.002,z*(1+.03*k)]),X(s,[.281+.002*k,y2+.002,z*(1+.03*(k+1))]),.0042-.0006*k,.0036-.0006*k),sph(X(s,[.281+.002*k,y2,z*(1+.03*(k+1))]),.0045-.0006*k));y=y2;});});
+    hp.push(...chain([X(s,[.27,.872,.02]),X(s,[.267,.835,.047]),X(s,[.264,.81,.058]),X(s,[.26,.79,.064])],[.005,.0045,.004,.0035]));
+    add('hand'+S,'hand'+S,shape(hp,.002),.0018);
+    // leg
+    add('femur'+S,'thigh'+S,shape([sph(X(s,[.09,.92,.0]),.022),cap(X(s,[.09,.92,0]),X(s,[.14,.9,-.005]),.013,.014),sph(X(s,[.148,.905,-.01]),.017),
+      cap(X(s,[.138,.88,-.005]),X(s,[.105,.55,.0]),.014,.013),sph(X(s,[.078,.525,-.004]),.022),sph(X(s,[.124,.525,-.004]),.022)],.014),.0026);
+    add('patella'+S,'shin'+S,shape([ell(X(s,[.101,.54,.042]),[.019,.022,.009])],.004),.002);
+    add('tibia'+S,'shin'+S,shape([ell(X(s,[.1,.492,.004]),[.044,.017,.033]),cap(X(s,[.1,.49,.01]),X(s,[.097,.12,-.02]),.016,.012),cap(X(s,[.1,.4,.02]),X(s,[.1,.47,.025]),.006,.009),sph(X(s,[.082,.092,-.028]),.013),ell(X(s,[.1,.105,-.025]),[.02,.012,.019])],.012),.0026);
+    add('fibula'+S,'shin'+S,shape([sph(X(s,[.14,.475,-.02]),.01),cap(X(s,[.14,.47,-.02]),X(s,[.134,.1,-.035]),.0065,.006),sph(X(s,[.134,.083,-.035]),.012)],.008),.0022);
+    // foot: talus, calcaneus, navicular, metatarsals and toes
+    const fp=[ell(X(s,[.103,.077,-.028]),[.018,.013,.022]),ell(X(s,[.105,.045,-.06]),[.018,.022,.034],null,[20,0,0]),ell(X(s,[.098,.06,.012]),[.024,.014,.016]),ell(X(s,[.122,.045,.0]),[.012,.012,.02])];
+    [0,1,2,3,4].forEach(i=>{const x0=.085+i*.011,x1=.075+i*.017,l=[.045,.042,.038,.034,.03][i],r=i===0?.008:.0048;
+      fp.push(cap(X(s,[x0,.052-i*.004,.02]),X(s,[x1,.022,.095-i*.008]),r,r*.85),sph(X(s,[x1,.02,.095-i*.008]),r*1.05));
+      fp.push(...chain([X(s,[x1,.02,.095-i*.008]),X(s,[x1+.001,.016,.095-i*.008+l*.5]),X(s,[x1+.002,.013,.095-i*.008+l])],[r*.8,r*.65,r*.55]));});
+    add('foot'+S,'foot'+S,shape(fp,.003),.0022);});
+  return out;}
+
+/* ribs and sternum: tubes on the chest bone; cartilage tinted separately */
+function ribCurves(){const ribs=[],cart=[];
+  for(let i=1;i<=12;i++){const y0=1.415-(i-1)*.0215,a=[.062,.085,.1,.11,.118,.123,.125,.124,.12,.114,.104,.09][i-1],b=[.06,.075,.085,.093,.098,.101,.102,.1,.096,.09,.08,.07][i-1];
+    const zc=-.004,end=i<=7?2.75-i*.02:i<=10?2.45-(i-8)*.12:1.9-(i-11)*.25,drop=.03+i*.004;
+    for(const s of [1,-1]){const pts=[];for(let k=0;k<=24;k++){const th=.25+(end-.25)*k/24;pts.push(new V(s*a*.97*Math.sin(th),y0-drop*Math.pow((th-.25)/(PI-.25),1.3)+.012*Math.sin(th*1.4),zc-b*.9*Math.cos(th)));}
+      pts.unshift(new V(s*.014,y0+.004,-.07));ribs.push(new THREE.CatmullRomCurve3(pts));
+      const e=pts[pts.length-1];if(i<=7){const sy=1.405-(i-1)*.023,st=new V(s*.016,sy,.085+(i-1)*.0015);cart.push(new THREE.CatmullRomCurve3([e,e.clone().lerp(st,.5).add(new V(0,.004,.008)),st]));}
+      else if(i<=10){const tgt=new V(s*a*.45,1.415-6*.0215-.07-(i-8)*.006,.08);cart.push(new THREE.CatmullRomCurve3([e,e.clone().lerp(tgt,.5).add(new V(0,.01,.01)),tgt]));}}}
+  return {ribs,cart};}
+
+/* ================= organs: signed-distance models on the bones that carry them ================= */
+// each: key, bone, colour key, builder → shape, resolution, pivot for animated ones
+function organDefs(){const D=[];const add=(key,bone,mat,S,h=.003,pivot)=>D.push({key,bone,mat,S,h,pivot});
+  // brain with folded cortex, cerebellum and stem
+  const gyri=(d,x,y,z)=>d+.0024*Math.sin(x*190+Math.sin(z*90)*2.2)*Math.sin(y*175+Math.sin(x*70)*2)*Math.sin(z*160+Math.sin(y*80)*2);
+  add('brain','head','brain',shape([ell([0,1.676,-.014],[.062,.07,.083])],.01,[ell([0,1.70,-.014],[.0035,.06,.1])],.004,gyri),.0022);
+  add('cerebellum','head','brain2',shape([ell([0,1.62,-.066],[.046,.024,.03])],.01,[],.004,(d,x,y,z)=>d+.0012*Math.sin(y*900)),.002);
+  add('stem','head','brain2',shape([cap([0,1.635,-.03],[0,1.56,-.043],.011,.009)],.006),.0025);
+  add('eyeL','head','eye',shape([sph([.032,1.646,.068],.012)],.004),.002);add('eyeR','head','eye',shape([sph([-.032,1.646,.068],.012)],.004),.002);
+  // lungs: left has the cardiac notch; both sit on the diaphragm dome
+  for(const s of [1,-1]){const S=s>0?'L':'R';
+    add('lung'+S,'chest','lung',shape([ell(X(s,[.064,1.29,-.008]),[.054,.112,.072]),ell(X(s,[.05,1.385,-.002]),[.034,.045,.036])],.03,
+      [ell(X(s,[.064,1.15,-.01]),[.075,.04,.085]),...(s>0?[sph([.03,1.225,.05],.05)]:[]),cap(X(s,[.0,1.3,.0]),X(s,[.0,1.2,-.02]),.02,.02)],.014),.0034,X(s,[.06,1.39,-.01]));}
+  // heart: ventricles (apex down and to the left) and atria, beating separately
+  add('ventricles','chest','heart',shape([ell([.016,1.222,.042],[.043,.056,.038],null,[-20,0,38]),ell([.0,1.235,.055],[.032,.04,.028],null,[0,0,30])],.012),.0024,[.0,1.25,.04]);
+  add('atria','chest','heart2',shape([ell([-.006,1.27,.028],[.042,.024,.03]),sph([-.032,1.25,.032],.024),sph([.03,1.27,.02],.017)],.012),.0024,[-.005,1.265,.028]);
+  // abdomen
+  add('liver','spine','liver',shape([ell([-.04,1.135,.02],[.1,.052,.072],null,[0,0,-12]),ell([-.07,1.13,.0],[.06,.06,.07])],.02,[ell([-.02,1.06,.05],[.1,.03,.06],null,[0,0,-12])],.012),.0034);
+  add('gall','spine','gall',shape([ell([-.032,1.088,.072],[.011,.022,.011],null,[30,0,0])],.004),.0022);
+  add('stomach','spine','stomach',shape(chain([[.026,1.17,.0],[.065,1.145,.03],[.072,1.095,.055],[.04,1.068,.066],[-.008,1.075,.06]],[.016,.038,.038,.027,.014])
+     .concat([ell([.06,1.16,.025],[.03,.03,.03])]),.018),.003);
+  add('spleen','spine','spleen',shape([ell([.1,1.135,-.042],[.02,.04,.017],null,[0,25,-10])],.006),.0024);
+  add('pancreas','spine','pancreas',shape(chain([[.085,1.1,-.025],[.04,1.087,-.012],[-.015,1.078,.0],[-.03,1.07,.012]],[.0075,.011,.012,.014]),.008),.0024);
+  for(const s of [1,-1]){const S=s>0?'L':'R';
+    add('kidney'+S,'spine','kidney',shape([ell(X(s,[.058,1.07,-.055]),[.025,.043,.017],null,[0,0,s*14])],.006,[sph(X(s,[.034,1.07,-.048]),.013)],.008),.0024);
+    add('adrenal'+S,'spine','pancreas',shape([ell(X(s,[.055,1.118,-.055]),[.016,.009,.008],null,[0,0,s*-20])],.004),.0022);}
+  add('bladder','hips','bladder',shape([ell([0,.885,.045],[.03,.025,.027])],.006),.0026);
+  return D;}
+
+/* tubes of the digestive tract and airway */
+function organTubes(){const T=[];
+  // small intestine: a long loop folded into the lower abdomen
+  const P=[];for(let i=0;i<=900;i++){const s=i/900*TAU*7.5,ring=Math.floor(i/60);const ox=.072*Math.sin(s*.97+ring*.7),oy=.045*Math.cos(s*.53+ring*.33)+.035*Math.sin(i/900*PI*3),oz=.026*Math.sin(s*1.3+ring);
+    P.push(new V(ox*Math.cos(i*.004),1.0+oy,.05+oz));}
+  T.push({key:'smallint',bone:'hips',mat:'smallint',curve:new THREE.CatmullRomCurve3(P),r:.0105,seg:1000,rs:8});
+  // large intestine frames it: caecum → ascending → transverse → descending → sigmoid → rectum
+  T.push({key:'colon',bone:'hips',mat:'colon',curve:new THREE.CatmullRomCurve3([[-.085,.93,.05],[-.09,.99,.055],[-.09,1.07,.05],[-.06,1.1,.065],[0,1.085,.08],[.06,1.1,.065],[.095,1.08,.04],[.095,1.0,.04],[.085,.94,.045],[.04,.92,.05],[.02,.93,.0],[.005,.9,-.04],[0,.86,-.035]].map(p=>new V(...p))),r:.018,seg:240,rs:12,haustra:true});
+  T.push({key:'esoph',bone:'chest',mat:'stomach',curve:new THREE.CatmullRomCurve3([[0,1.52,.012],[0,1.42,-.005],[.005,1.3,-.03],[.016,1.22,-.02],[.026,1.175,.0]].map(p=>new V(...p))),r:.006,seg:60,rs:8});
+  T.push({key:'trachea',bone:'chest',mat:'airway',curve:new THREE.CatmullRomCurve3([[0,1.53,.03],[0,1.44,.025],[0,1.33,.012]].map(p=>new V(...p))),r:.0085,seg:40,rs:10,rings:true});
+  for(const s of [1,-1])T.push({key:'bronch'+(s>0?'L':'R'),bone:'chest',mat:'airway',curve:new THREE.CatmullRomCurve3([[0,1.335,.012],X(s,[.025,1.31,.008]),X(s,[.05,1.285,.0]),X(s,[.065,1.25,-.01])].map(p=>new V(...p))),r:.0058,seg:30,rs:8,rings:true});
+  return T;}
+function tubeGeo(t){const g=new THREE.TubeGeometry(t.curve,t.seg,t.r,t.rs,false);
+  if(t.haustra||t.rings){const P=g.attributes.position,uv=g.attributes.uv,L=t.curve.getLength(),c=new V(),p=new V();
+    for(let i=0;i<P.count;i++){const u=uv.getX(i);t.curve.getPointAt(Math.min(u,1),c);p.fromBufferAttribute(P,i);const k=t.haustra?1+.18*Math.pow(Math.abs(Math.sin(u*L*PI/.022)),.6):1+.12*(Math.sin(u*L*PI/.004)>.3?1:0);p.sub(c).multiplyScalar(k).add(c);P.setXYZ(i,p.x,p.y,p.z);}
+    g.computeVertexNormals();}
+  return g;}
+
+/* diaphragm: a muscular dome under the lungs */
+function diaphragmGeo(){const g=new THREE.SphereGeometry(1,48,16,0,TAU,0,1.25);const P=g.attributes.position;
+  for(let i=0;i<P.count;i++){let x=P.getX(i),y=P.getY(i),z=P.getZ(i);const dome=y-Math.cos(1.25);x*=.125;z*=.098;y=dome*.11+.012*Math.cos(x*40);
+    // two cupolas: right higher than left
+    y+=x<0?.008:0;P.setXYZ(i,x,y,z);}g.computeVertexNormals();g.translate(0,1.135,-.004);return g;}
+
+const ORGAN_INFO={};
+function buildOrgans(F){const M=F.mats;F.organs={};
+  for(const o of GEO.organs){const m=F.attach('organ',o.geo,o.bone,M[o.mat],o.key);if(o.pivot){m.position.set(o.pivot[0]-J[o.bone][0],o.pivot[1]-J[o.bone][1],o.pivot[2]-J[o.bone][2]);}F.organs[o.key]=m;}
+  for(const t of GEO.otubes){F.organs[t.key]=F.attach('organ',t.geo,t.bone,M[t.mat],t.key);}
+  F.organs.diaphragm=F.attach('organ',GEO.diaphragm,'chest',M.diaphragm,'diaphragm');F.organs.diaphragm.position.set(0,1.135-J.chest[1],-J.chest[2]);F.organs.diaphragm.userData.y0=F.organs.diaphragm.position.y;}
+function organUpdate(F,st){const O=F.organs;if(!O)return;const b=st.breath;
+  for(const S of ['L','R']){const l=O['lung'+S];if(l)l.scale.set(1+.035*b,1+.07*b,1+.045*b);}
+  if(O.diaphragm){O.diaphragm.position.y=O.diaphragm.userData.y0-.022*b;O.diaphragm.scale.set(1+.02*b,1-.3*b,1+.02*b);}
+  const v=O.ventricles,a=O.atria;if(v){const k=1-.075*st.vSys;v.scale.set(k,1-.06*st.vSys,k);v.rotation.y=.05*st.vSys;}if(a){const k=1-.09*st.aSys;a.scale.set(k,k,k);}}
+
+/* ================= muscles: spindles stretched between their origin and insertion ================= */
+// [name, origin bone, origin point, insertion bone, insertion point, radius, flatten (depth factor), tendon fractions [start,end], centre?]
+const MUSCLES=[
+ ['胸锁乳突肌','head',[.062,1.62,-.03],'chest',[.02,1.425,.075],.011,.7,[.08,.1]],
+ ['斜方肌（上）','head',[.0,1.645,-.07],'chest',[.15,1.447,-.035],.022,.32,[.05,.08]],
+ ['斜方肌（中）','chest',[.0,1.40,-.098],'chest',[.14,1.432,-.058],.022,.32,[.05,.08]],
+ ['斜方肌（下）','chest',[.0,1.24,-.098],'chest',[.11,1.4,-.078],.02,.3,[.05,.08]],
+ ['三角肌（前）','chest',[.12,1.447,.032],'armL',[.21,1.31,.0],.022,.8,[.04,.15]],
+ ['三角肌（中）','chest',[.168,1.452,-.012],'armL',[.215,1.31,-.014],.024,.8,[.04,.15]],
+ ['三角肌（后）','chest',[.13,1.432,-.07],'armL',[.21,1.31,-.03],.022,.8,[.04,.15]],
+ ['胸大肌（锁骨部）','chest',[.05,1.427,.077],'armL',[.198,1.372,.02],.022,.35,[.04,.12]],
+ ['胸大肌（胸骨部）','chest',[.016,1.33,.1],'armL',[.198,1.36,.016],.03,.35,[.04,.12]],
+ ['胸大肌（腹部）','chest',[.04,1.25,.1],'armL',[.195,1.355,.01],.022,.35,[.04,.12]],
+ ['背阔肌（上）','chest',[.03,1.25,-.098],'armL',[.193,1.35,-.024],.026,.3,[.04,.15]],
+ ['背阔肌（下）','spine',[.05,1.05,-.088],'armL',[.19,1.345,-.02],.03,.3,[.04,.15]],
+ ['前锯肌','chest',[.118,1.21,.045],'chest',[.1,1.33,-.06],.016,.4,[.05,.05]],
+ ['腹直肌','hips',[.034,.9,.085],'chest',[.044,1.27,.103],.022,.35,[.06,.04]],
+ ['腹外斜肌','chest',[.122,1.2,.05],'hips',[.07,.94,.085],.028,.35,[.04,.08]],
+ ['竖脊肌','hips',[.03,.94,-.078],'chest',[.034,1.38,-.072],.018,.6,[.06,.06]],
+ ['肱二头肌','chest',[.17,1.4,.012],'foreL',[.245,1.11,.0],.02,1,[.2,.2]],
+ ['肱肌','armL',[.215,1.25,-.008],'foreL',[.24,1.12,-.018],.016,1,[.05,.15]],
+ ['肱三头肌（长头）','chest',[.155,1.39,-.05],'foreL',[.232,1.14,-.07],.02,1,[.1,.18]],
+ ['肱三头肌（外侧头）','armL',[.205,1.35,-.04],'foreL',[.235,1.15,-.07],.016,1,[.05,.18]],
+ ['肱桡肌','armL',[.24,1.2,-.02],'handL',[.27,.9,.015],.013,1,[.04,.45]],
+ ['前臂屈肌群','armL',[.215,1.15,-.035],'handL',[.27,.89,-.005],.016,1,[.04,.45]],
+ ['前臂伸肌群','armL',[.255,1.15,-.042],'handL',[.276,.9,-.02],.014,1,[.04,.45]],
+ ['臀大肌（上）','hips',[.03,1.0,-.1],'thighL',[.14,.85,-.04],.04,.5,[.03,.18]],
+ ['臀大肌（下）','hips',[.02,.92,-.09],'thighL',[.13,.8,-.04],.035,.5,[.03,.18]],
+ ['臀中肌','hips',[.13,1.02,-.03],'thighL',[.15,.9,-.005],.03,.5,[.03,.18]],
+ ['阔筋膜张肌 · 髂胫束','hips',[.132,.98,.045],'shinL',[.14,.5,.0],.013,.7,[.03,.65]],
+ ['股直肌','hips',[.09,.93,.07],'shinL',[.1,.49,.045],.028,1,[.1,.18]],
+ ['股外侧肌','thighL',[.14,.87,.01],'shinL',[.115,.52,.04],.034,1,[.05,.14]],
+ ['股内侧肌','thighL',[.07,.78,.012],'shinL',[.085,.52,.035],.031,1,[.05,.1]],
+ ['缝匠肌','hips',[.13,.98,.07],'shinL',[.07,.47,.0],.011,.8,[.03,.08]],
+ ['长收肌','hips',[.03,.89,.04],'thighL',[.08,.7,.0],.025,1,[.05,.1]],
+ ['大收肌','hips',[.04,.86,-.04],'thighL',[.085,.58,-.02],.03,1,[.05,.12]],
+ ['股薄肌','hips',[.02,.87,.02],'shinL',[.065,.47,-.01],.012,1,[.04,.2]],
+ ['股二头肌','hips',[.065,.875,-.06],'shinL',[.135,.48,-.03],.026,1,[.08,.15]],
+ ['半腱肌','hips',[.055,.875,-.065],'shinL',[.07,.47,-.02],.022,1,[.08,.3]],
+ ['腓肠肌（内侧头）','thighL',[.075,.55,-.03],'footL',[.105,.06,-.08],.028,1,[.04,.48]],
+ ['腓肠肌（外侧头）','thighL',[.125,.55,-.03],'footL',[.105,.06,-.08],.025,1,[.04,.5]],
+ ['比目鱼肌','shinL',[.11,.43,-.04],'footL',[.105,.06,-.08],.028,.8,[.08,.32]],
+ ['胫骨前肌','shinL',[.12,.45,.03],'footL',[.09,.04,.05],.016,1,[.05,.4]],
+ ['腓骨长肌','shinL',[.14,.45,-.02],'footL',[.13,.05,.0],.012,1,[.05,.45]]];
+const CENTRE=new Set(['斜方肌（中）','斜方肌（下）']);
+
+function spindleGeo(t0,t1){const pts=[];const N=28;
+  for(let i=0;i<=N;i++){const t=i/N;let r;if(t<t0)r=.16+.1*(t/t0);else if(t>1-t1)r=.16+.1*((1-t)/t1);else{const u=(t-t0)/(1-t0-t1);r=.26+.74*Math.pow(Math.sin(PI*u),.75);}pts.push(new THREE.Vector2(i===0||i===N?0.001:r,t));}
+  const g=new THREE.LatheGeometry(pts,18);const C=new Float32Array(g.attributes.position.count*3),P=g.attributes.position;
+  for(let i=0;i<P.count;i++){const t=P.getY(i),ten=t<t0?1-t/t0:t>1-t1?1-(1-t)/t1:0,k=sst(0,.5,ten);C[i*3]=lerp(.5,.82,k);C[i*3+1]=lerp(.085,.78,k);C[i*3+2]=lerp(.075,.7,k);}
+  g.setAttribute('color',new THREE.BufferAttribute(C,3));return g;}
+
+function buildMuscles(F){const M=F.mats;F.muscles=[];
+  const list=[];for(const m of MUSCLES){const [n,ab,a,bb,b,r,fl,tt]=m;list.push({n,ab,a,bb,b,r,fl,tt,s:1});
+    if(a[0]!==0||b[0]!==0||!CENTRE.has(n))list.push({n,ab:sideBone(ab,-1),a:mirror(a),bb:sideBone(bb,-1),b:mirror(b),r,fl,tt,s:-1});}
+  for(const d of list){const A=new THREE.Object3D(),B=new THREE.Object3D(),by=F.rig.by;
+    A.position.set(d.a[0]-J[d.ab][0],d.a[1]-J[d.ab][1],d.a[2]-J[d.ab][2]);by[d.ab].add(A);B.position.set(d.b[0]-J[d.bb][0],d.b[1]-J[d.bb][1],d.b[2]-J[d.bb][2]);by[d.bb].add(B);
+    const key=d.tt.join(',');if(!GEO.spindle)GEO.spindle={};if(!GEO.spindle[key])GEO.spindle[key]=spindleGeo(d.tt[0],d.tt[1]);
+    const mat=M.muscle.clone();const mesh=new THREE.Mesh(GEO.spindle[key],mat);mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.info='muscle:'+d.n;
+    F.root.add(mesh);F.layer('muscle').push(mesh);
+    const L0=Math.hypot(d.b[0]-d.a[0],d.b[1]-d.a[1],d.b[2]-d.a[2]);F.muscles.push({...d,A,B,mesh,mat,L0,L:L0,act:0});}}
+
+const _ma=new V(),_mb=new V(),_mx=new V(),_my=new V(),_mz=new V(),_mn=new V(),_mm=new THREE.Matrix4(),_hp=new V();
+function muscleUpdate(F,dt,glow){if(!F.muscles.length||!F.muscles[0].mesh.visible)return;F.rig.by.hips.getWorldPosition(_hp);
+  for(const m of F.muscles){m.A.getWorldPosition(_ma);m.B.getWorldPosition(_mb);F.root.worldToLocal(_ma);F.root.worldToLocal(_mb);
+    _my.subVectors(_mb,_ma);const L=_my.length();_my.divideScalar(L);
+    // flatten the belly against the body: depth axis points away from the body's long axis
+    _mn.addVectors(_ma,_mb).multiplyScalar(.5);_mn.x-=0;_mn.y=0;_mn.z+=.01;if(_mn.lengthSq()<1e-6)_mn.set(0,0,1);_mn.normalize();
+    _mz.copy(_mn).addScaledVector(_my,-_mn.dot(_my));if(_mz.lengthSq()<1e-6)_mz.set(0,0,1);_mz.normalize();_mx.crossVectors(_my,_mz);
+    const k=clamp(Math.sqrt(m.L0/L),.8,1.3),w=m.r*k*(m.fl<1?1.25:1),dep=m.r*k*m.fl;
+    _mm.makeBasis(_mx.multiplyScalar(w),_my.clone().multiplyScalar(L),_mz.multiplyScalar(dep));_mm.setPosition(_ma);m.mesh.matrixAutoUpdate=false;m.mesh.matrix.copy(_mm);
+    // activation: shortening under load reads as effort; eased so it glows and fades
+    const v=dt>0?(m.L-L)/m.L0/dt:0;m.L=L;const target=clamp(v*9,0,1);m.act+=(target-m.act)*Math.min(1,dt*6);
+    m.mat.emissiveIntensity=glow*m.act*1.4;}}
+
+/* ================= circulation and nerves: skinned tubes that bend with the joints ================= */
+// path = [[point, bone], ...]; s = side (+1 left / −1 right); kinds: art, vein, part (pulmonary artery, blue), pvein (pulmonary vein, red), nerve
+function vesselPaths(){const P=[],add=(key,kind,r0,r1,pts)=>P.push({key,kind,r0,r1,pts});const S=s=>s>0?'L':'R';
+  add('主动脉','art',.0125,.009,[[[.002,1.24,.05],'chest'],[[.004,1.3,.045],'chest'],[[.012,1.338,.02],'chest'],[[.022,1.33,-.012],'chest'],[[.02,1.3,-.03],'chest'],[[.016,1.2,-.02],'chest'],[[.012,1.1,-.002],'spine'],[[.006,1.03,.004],'spine'],[[0,.99,.006],'hips']]);
+  add('冠状动脉','art',.0018,.0014,[[[.0,1.25,.066],'chest'],[[.022,1.236,.076],'chest'],[[.042,1.2,.066],'chest'],[[.05,1.178,.04],'chest']]);
+  add('冠状动脉','art',.0016,.0013,[[[.0,1.25,.066],'chest'],[[-.025,1.245,.07],'chest'],[[-.045,1.23,.05],'chest'],[[-.04,1.2,.02],'chest']]);
+  for(const s of [1,-1]){const x=p=>X(s,p),T=b=>b+S(s);
+    add('颈总动脉 → 颈内动脉','art',.0055,.004,[[[s*.008,1.338,.025],'chest'],[x([.022,1.42,.025]),'chest'],[x([.026,1.5,.02]),'neck'],[x([.03,1.56,.0]),'head'],[x([.03,1.63,-.01]),'head'],[x([.035,1.68,.02]),'head'],[x([.03,1.73,-.02]),'head']]);
+    add('颈外动脉 · 面动脉 · 颞浅动脉','art',.0028,.002,[[x([.026,1.5,.02]),'neck'],[x([.04,1.555,.03]),'head'],[x([.05,1.6,.045]),'head'],[x([.062,1.66,.03]),'head'],[x([.06,1.72,-.0]),'head']]);
+    add('锁骨下动脉 → 肱动脉','art',.0065,.0045,[[[s*.012,1.338,.02],'chest'],[x([.04,1.38,.02]),'chest'],[x([.1,1.405,.02]),'chest'],[x([.165,1.39,.0]),'chest'],[x([.195,1.35,.0]),T('arm')],[x([.21,1.25,.0]),T('arm')],[x([.235,1.14,-.01]),T('fore')]]);
+    add('桡动脉','art',.003,.0024,[[x([.235,1.14,-.01]),T('fore')],[x([.25,1.05,.005]),T('fore')],[x([.265,.93,.015]),T('fore')],[x([.272,.88,.02]),T('hand')],[x([.278,.84,.0]),T('hand')]]);
+    add('尺动脉','art',.003,.0024,[[x([.235,1.14,-.01]),T('fore')],[x([.245,1.05,-.03]),T('fore')],[x([.268,.93,-.025]),T('fore')],[x([.275,.88,-.02]),T('hand')],[x([.279,.84,-.005]),T('hand')]]);
+    add('肾动脉','art',.004,.0035,[[[s*.006,1.07,.0],'spine'],[x([.04,1.07,-.04]),'spine']]);
+    add('髂总动脉 → 股动脉 → 腘动脉','art',.007,.0055,[[[0,.99,.006],'hips'],[x([.04,.95,.02]),'hips'],[x([.07,.91,.045]),'hips'],[x([.085,.87,.05]),T('thigh')],[x([.085,.78,.035]),T('thigh')],[x([.075,.66,.015]),T('thigh')],[x([.075,.57,-.03]),T('thigh')],[x([.095,.5,-.035]),T('shin')],[x([.1,.45,-.03]),T('shin')]]);
+    add('股深动脉','art',.0035,.0028,[[x([.085,.8,.04]),T('thigh')],[x([.11,.7,.0]),T('thigh')],[x([.12,.6,-.02]),T('thigh')]]);
+    add('胫前动脉 · 足背动脉','art',.0035,.0026,[[x([.1,.45,-.03]),T('shin')],[x([.115,.43,.01]),T('shin')],[x([.115,.25,.025]),T('shin')],[x([.11,.1,.02]),T('shin')],[x([.11,.06,.05]),T('foot')],[x([.11,.035,.11]),T('foot')]]);
+    add('胫后动脉','art',.0036,.0026,[[x([.1,.45,-.03]),T('shin')],[x([.09,.3,-.035]),T('shin')],[x([.085,.11,-.035]),T('shin')],[x([.09,.05,-.04]),T('foot')],[x([.1,.025,.05]),T('foot')]]);
+    // veins
+    add('头臂静脉 → 锁骨下静脉 → 贵要静脉','vein',.0075,.0035,[[[-.022,1.37,.04],'chest'],[x([.04,1.395,.04]),'chest'],[x([.12,1.41,.03]),'chest'],[x([.165,1.395,.015]),'chest'],[x([.2,1.35,.012]),T('arm')],[x([.215,1.25,.012]),T('arm')],[x([.232,1.14,.0]),T('fore')],[x([.242,1.05,-.022]),T('fore')],[x([.265,.93,-.02]),T('fore')],[x([.275,.86,-.015]),T('hand')]]);
+    add('头静脉','vein',.0028,.0022,[[x([.165,1.4,.03]),'chest'],[x([.205,1.37,.032]),T('arm')],[x([.226,1.25,.026]),T('arm')],[x([.246,1.13,.016]),T('fore')],[x([.266,1.0,.022]),T('fore')],[x([.272,.9,.022]),T('hand')]]);
+    add('颈内静脉','vein',.0062,.005,[[[-.022,1.37,.04],'chest'],[x([.032,1.4,.035]),'chest'],[x([.036,1.47,.026]),'neck'],[x([.04,1.55,.005]),'head'],[x([.046,1.6,-.02]),'head']]);
+    add('髂静脉 → 股静脉 → 腘静脉','vein',.008,.004,[[[-.005,.985,.012],'hips'],[x([.035,.95,.022]),'hips'],[x([.062,.91,.042]),'hips'],[x([.075,.87,.046]),T('thigh')],[x([.074,.78,.03]),T('thigh')],[x([.067,.66,.01]),T('thigh')],[x([.068,.57,-.035]),T('thigh')],[x([.088,.5,-.04]),T('shin')],[x([.09,.3,-.042]),T('shin')],[x([.082,.11,-.04]),T('shin')],[x([.088,.05,-.045]),T('foot')]]);
+    add('大隐静脉','vein',.0026,.0022,[[x([.075,.87,.05]),T('thigh')],[x([.058,.75,.036]),T('thigh')],[x([.052,.6,.0]),T('thigh')],[x([.066,.5,-.024]),T('shin')],[x([.068,.35,-.014]),T('shin')],[x([.074,.15,.0]),T('shin')],[x([.08,.09,.02]),T('foot')],[x([.09,.04,.062]),T('foot')]]);
+    add('肾静脉','vein',.0045,.0038,[[[-.016,1.07,.012],'spine'],[x([.042,1.075,-.035]),'spine']]);
+    // pulmonary circuit
+    add('肺静脉','pvein',.005,.0045,[[x([.055,1.25,.0]),'chest'],[x([.025,1.255,.015]),'chest'],[[0,1.262,.02],'chest']]);}
+  add('下腔静脉','vein',.011,.01,[[[-.012,1.235,.035],'chest'],[[-.02,1.17,.0],'chest'],[[-.02,1.1,.01],'spine'],[[-.015,1.03,.012],'spine'],[[-.005,.985,.012],'hips']]);
+  add('上腔静脉','vein',.009,.0085,[[[-.012,1.27,.04],'chest'],[[-.02,1.33,.04],'chest'],[[-.022,1.37,.04],'chest']]);
+  add('肺动脉','part',.008,.006,[[[.01,1.255,.068],'chest'],[[.016,1.29,.052],'chest'],[[.01,1.31,.03],'chest'],[[.04,1.3,.01],'chest'],[[.06,1.28,.0],'chest']]);
+  add('肺动脉','part',.006,.005,[[[.01,1.31,.03],'chest'],[[-.03,1.305,.02],'chest'],[[-.06,1.28,.0],'chest']]);
+  return P;}
+
+function nervePaths(){const P=[],add=(key,r0,r1,pts)=>P.push({key,kind:'nerve',r0,r1,pts});const S=s=>s>0?'L':'R';
+  add('脊髓',.0052,.0042,[[[0,1.56,-.043],'head'],[[0,1.5,-.048],'neck'],[[0,1.45,-.062],'neck'],[[0,1.39,-.075],'chest'],[[0,1.27,-.077],'chest'],[[0,1.17,-.06],'chest'],[[0,1.1,-.057],'spine']]);
+  add('马尾',.0032,.0026,[[[0,1.1,-.057],'spine'],[[0,1.03,-.068],'spine'],[[0,.97,-.08],'hips']]);
+  for(const s of [1,-1]){const x=p=>X(s,p),T=b=>b+S(s);
+    add('正中神经',.0028,.0024,[[x([.004,1.44,-.06]),'neck'],[x([.05,1.42,-.03]),'chest'],[x([.12,1.41,.0]),'chest'],[x([.175,1.38,-.01]),'chest'],[x([.2,1.33,-.008]),T('arm')],[x([.215,1.22,-.012]),T('arm')],[x([.238,1.13,-.015]),T('fore')],[x([.255,1.0,-.008]),T('fore')],[x([.27,.9,.0]),T('fore')],[x([.278,.84,.0]),T('hand')]]);
+    add('尺神经',.0024,.002,[[x([.175,1.38,-.012]),'chest'],[x([.2,1.33,-.016]),T('arm')],[x([.22,1.2,-.045]),T('arm')],[x([.228,1.15,-.06]),T('arm')],[x([.24,1.05,-.04]),T('fore')],[x([.265,.92,-.028]),T('fore')],[x([.278,.85,-.02]),T('hand')]]);
+    add('桡神经',.0024,.002,[[x([.175,1.38,-.014]),'chest'],[x([.19,1.35,-.03]),T('arm')],[x([.22,1.28,-.04]),T('arm')],[x([.25,1.17,-.03]),T('arm')],[x([.255,1.05,-.01]),T('fore')],[x([.27,.93,.01]),T('fore')]]);
+    add('坐骨神经 → 胫神经',.0048,.0022,[[x([.004,1.0,-.075]),'hips'],[x([.04,.95,-.07]),'hips'],[x([.085,.88,-.06]),T('thigh')],[x([.1,.8,-.05]),T('thigh')],[x([.105,.62,-.045]),T('thigh')],[x([.1,.54,-.045]),T('thigh')],[x([.1,.5,-.045]),T('shin')],[x([.095,.3,-.04]),T('shin')],[x([.088,.1,-.04]),T('shin')],[x([.095,.04,-.03]),T('foot')],[x([.1,.02,.06]),T('foot')]]);
+    add('腓总神经',.0022,.0018,[[x([.1,.54,-.045]),T('thigh')],[x([.135,.47,-.03]),T('shin')],[x([.13,.42,.0]),T('shin')],[x([.12,.2,.025]),T('shin')],[x([.115,.05,.06]),T('foot')]]);
+    add('股神经',.003,.0024,[[x([.02,1.05,-.04]),'spine'],[x([.06,.95,.02]),'hips'],[x([.095,.88,.052]),'hips'],[x([.1,.8,.052]),T('thigh')],[x([.1,.7,.046]),T('thigh')]]);}
+  return P;}
+
+// build one tube per path with variable radius, skin weights and distance-from-source for the flow shader
+function buildTubes(paths,rk=1){const out=[],samples={};
+  for(const p of paths){const pts=p.pts.map(q=>new V(...q[0])),curve=new THREE.CatmullRomCurve3(pts,false,'centripetal'),len=curve.getLength();
+    const fam=p.kind==='nerve'?'n':p.kind==='vein'||p.kind==='part'?'v':'a';const list=samples[fam]||(samples[fam]=[]);
+    let d0=0;if(list.length){let best=1e9;for(const s of list){const d=s.p.distanceToSquared(pts[0]);if(d<best){best=d;d0=s.d;}}}
+    const seg=Math.max(8,Math.round(len/.006)),rs=p.r0>.005?10:7,g=new THREE.TubeGeometry(curve,seg,1,rs,false);
+    const P=g.attributes.position,uv=g.attributes.uv,c=new V(),q=new V(),D=new Float32Array(P.count);
+    for(let i=0;i<P.count;i++){const u=uv.getX(i);curve.getPointAt(u,c);q.fromBufferAttribute(P,i).sub(c).multiplyScalar(lerp(p.r0,p.r1,u)*rk).add(c);P.setXYZ(i,q.x,q.y,q.z);D[i]=d0+u*len;}
+    for(let k=0;k<=20;k++)list.push({p:curve.getPointAt(k/20),d:d0+k/20*len});
+    g.setAttribute('aDist',new THREE.BufferAttribute(D,1));g.computeVertexNormals();pathWeights(g,p.pts);out.push({key:p.key,kind:p.kind,geo:g});}
+  return out;}
+
+// flow material: arteries pulse outward with each beat, veins drift steadily home, nerves carry sparks
+const FLOW={time:{value:0},beat:{value:0},spark:{value:0}};
+function flowMat(color,kind){const m=new THREE.MeshStandardMaterial({color,roughness:.38,metalness:0,skinning:true,emissive:color,emissiveIntensity:0});
+  m.onBeforeCompile=sh=>{sh.uniforms.uTime=FLOW.time;sh.uniforms.uBeat=FLOW.beat;sh.uniforms.uSpark=FLOW.spark;
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float aDist;varying float vDist;').replace('#include <begin_vertex>','#include <begin_vertex>\nvDist=aDist;');
+    const body=kind==='a'?'float w=uBeat*5.5-vDist;float pulse=exp(-w*w*30.)*step(0.,w+.1);float streak=pow(fract(vDist*18.-uTime*2.2),6.);float glow=pulse*1.6+streak*.35;'
+      :kind==='v'?'float streak=pow(fract(vDist*16.+uTime*.9),5.);float glow=streak*.32;'
+      :'float s1=fract(vDist*1.6-uTime*1.3);float glow=.18+pow(s1,22.)*3.*uSpark+pow(fract(vDist*9.-uTime*.6),8.)*.2;';
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uTime;uniform float uBeat;uniform float uSpark;varying float vDist;')
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n'+body+'totalEmissiveRadiance=emissive*glow;');};
+  return m;}
+function buildVessels(F){const M=F.mats;for(const t of GEO.vessels)F.skinned('vessel',t.geo,t.kind==='art'||t.kind==='pvein'?M.art:M.vein,'vessel:'+t.key);}
+function buildNerves(F){const M=F.mats;for(const t of GEO.nerves)F.skinned('nerve',t.geo,M.nerve,'nerve:'+t.key);
+  if(GEO.brainN)F.attach('nerve',GEO.brainN,'head',M.brainN,'organ:brain');}
+
+/* ================= figure: one rig plus whichever layers it shows ================= */
+const GEO={};   // shared geometry, built once
+function restBoneWorld(n){return new V(...J[n]);}
+function boneLocal(geo,bone){const g=geo.clone();const p=restBoneWorld(bone);g.translate(-p.x,-p.y,-p.z);return g;}
+function makeRig(){const bones=BONES.map(([n,par])=>{const b=new THREE.Bone();b.name=n;return b;});
+  BONES.forEach(([n,par],i)=>{const p=new V(...J[n]);if(par){const q=new V(...J[par]);bones[i].position.copy(p.sub(q));bones[BI[par]].add(bones[i]);}else bones[i].position.copy(p);});
+  return {bones,skel:new THREE.Skeleton(bones),by:Object.fromEntries(bones.map(b=>[b.name,b]))};}
+
+class Figure{
+  constructor(layers,x,mats){this.root=new THREE.Group();this.root.position.x=x;this.rig=makeRig();this.root.add(this.rig.bones[0]);this.layers={};this.mats=mats;this.muscles=[];
+    this.root.updateMatrixWorld(true);for(const L of layers)this.build(L);}
+  layer(L){if(!this.layers[L]){const g=[];this.layers[L]=g;}return this.layers[L];}
+  attach(L,geo,bone,mat,info){const m=new THREE.Mesh(geo,mat);m.castShadow=L==='bone';m.receiveShadow=true;m.userData.info=info;this.rig.by[bone].add(m);this.layer(L).push(m);return m;}
+  skinned(L,geo,mat,info){const m=new THREE.SkinnedMesh(geo,mat);m.castShadow=L==='skin';m.receiveShadow=true;m.frustumCulled=false;m.userData.info=info;this.root.add(m);this.root.updateMatrixWorld(true);m.bind(this.rig.skel);this.layer(L).push(m);return m;}
+  build(L){const M=this.mats;
+    if(L==='skin'){this.skinMesh=this.skinned('skin',GEO.skin,M.skin,'skin');GEO.eyes.forEach(e=>this.attach('skin',e,'head',M.eye,'eye'));}
+    if(L==='bone'){GEO.bones.forEach(b=>this.attach('bone',b.geo,b.bone,b.cart?M.cart:b.key==='teeth'?M.tooth:M.bone,b.info));GEO.discs&&this.attach('bone',GEO.discs.g,'chest',M.disc,'disc');}
+    if(L==='organ'&&window.buildOrgans)buildOrgans(this);
+    if(L==='muscle'&&window.buildMuscles)buildMuscles(this);
+    if(L==='vessel'&&window.buildVessels)buildVessels(this);
+    if(L==='nerve'&&window.buildNerves)buildNerves(this);}
+  show(L,v){(this.layers[L]||[]).forEach(m=>m.visible=v);}
+}
+
+/* ================= build shared geometry ================= */
+// geometry is built as independent jobs so they can run in parallel workers (or one by one on the main thread)
+function geoRaw(g){const o={a:{},i:g.index?g.index.array:null};for(const k in g.attributes){const A=g.attributes[k];o.a[k]=[A.array,A.itemSize];}return o;}
+function rawGeo(r){const g=new THREE.BufferGeometry();for(const k in r.a)g.setAttribute(k,new THREE.BufferAttribute(r.a[k][0],r.a[k][1]));if(r.i)g.setIndex(new THREE.BufferAttribute(r.i,1));g.computeBoundingSphere();return g;}
+function jobList(){return ['skin',...skeletonParts().map((p,i)=>'bone:'+i),...organDefs().map((o,i)=>'organ:'+i),'misc'];}
+function runJob(id){
+  if(id==='skin'){const SK=skeletonParts();const cover=SK.filter(p=>!/^vert|teeth|scap/.test(p.key)).flatMap(p=>p.S.add);
+    cover.push(cap([0,1.41,.084],[0,1.225,.098],.014,.01,null,[1,1,.5]));const S=skinShape(cover);return {skin:geoRaw(skinWeights(mesh(S,.0058),S.parts))};}
+  if(id.startsWith('bone:')){const p=skeletonParts()[+id.slice(5)];return {bone:{key:p.key,bone:p.bone,g:geoRaw(boneLocal(mesh(p.S,p.h*1.4,.004),p.bone))}};}
+  if(id.startsWith('organ:')){const o=organDefs()[+id.slice(6)];const g=mesh(o.S,o.h*(o.key==='brain'?1.1:1.25),.004);if(o.pivot)g.translate(-o.pivot[0],-o.pivot[1],-o.pivot[2]);else{const p=J[o.bone];g.translate(-p[0],-p[1],-p[2]);}
+    return {organ:{key:o.key,bone:o.bone,mat:o.mat,pivot:o.pivot,g:geoRaw(g)}};}
+  if(id==='misc'){const {ribs,cart}=ribCurves(),R={};
+    const merge=a=>THREE.BufferGeometryUtils?THREE.BufferGeometryUtils.mergeBufferGeometries(a.map(g=>{g.deleteAttribute('uv');return g;})):a[0];
+    R.ribs=geoRaw(boneLocal(merge(ribs.map(c=>new THREE.TubeGeometry(c,40,.0055,7))),'chest'));R.cart=geoRaw(boneLocal(merge(cart.map(c=>new THREE.TubeGeometry(c,12,.0045,6))),'chest'));
+    const st=shape([cap([0,1.41,.084],[0,1.385,.088],.016,.014,null,[1,1,.45]),cap([0,1.385,.088],[0,1.25,.097],.012,.011,null,[1,1,.45]),cap([0,1.25,.097],[0,1.225,.095],.008,.004)],.008);
+    R.sternum=geoRaw(boneLocal(mesh(st,.0022,.004),'chest'));
+    R.otubes=organTubes().map(t=>({key:t.key,bone:t.bone,mat:t.mat,g:geoRaw(boneLocal(tubeGeo(t),t.bone))}));
+    {const g=diaphragmGeo();g.translate(0,-1.135,0);R.diaphragm=geoRaw(g);}
+    R.vessels=buildTubes(vesselPaths()).map(t=>({key:t.key,kind:t.kind,g:geoRaw(t.geo)}));R.nerves=buildTubes(nervePaths(),1.5).map(t=>({key:t.key,kind:t.kind,g:geoRaw(t.geo)}));
+    return {misc:R};}}
+function assemble(results){GEO.bones=[];GEO.organs=[];GEO.eyes=[];
+  for(const r of results){if(r.skin)GEO.skin=rawGeo(r.skin);if(r.bone)GEO.bones.push({key:r.bone.key,bone:r.bone.bone,geo:rawGeo(r.bone.g),info:r.bone.key.replace(/[LR]$/,'')});
+    if(r.organ)GEO.organs.push({...r.organ,geo:rawGeo(r.organ.g)});
+    if(r.misc){const m=r.misc;GEO.bones.push({key:'ribs',bone:'chest',geo:rawGeo(m.ribs),info:'ribs'},{key:'cart',bone:'chest',cart:true,geo:rawGeo(m.cart),info:'cart'},{key:'sternum',bone:'chest',geo:rawGeo(m.sternum),info:'sternum'});
+      GEO.otubes=m.otubes.map(t=>({...t,geo:rawGeo(t.g)}));GEO.diaphragm=rawGeo(m.diaphragm);GEO.vessels=m.vessels.map(t=>({...t,geo:rawGeo(t.g)}));GEO.nerves=m.nerves.map(t=>({...t,geo:rawGeo(t.g)}));}}}
+function buildGeometry(){assemble(jobList().map(runJob));}
+// parallel build: workers load three.js from the same CDN and run the same generator source; falls back to the main thread
+async function buildGeometryAsync(onProgress){const jobs=jobList(),results=new Array(jobs.length);let done=0;const tick=(i)=>{done++;onProgress&&onProgress(done,jobs.length,jobs[i]);};
+  const src=document.getElementById('gen');let pool=[];
+  try{const n=Math.max(1,Math.min(4,(navigator.hardwareConcurrency||2)-1));if(!src||!window.Worker||location.protocol==='file:')throw 0;
+    const code=`importScripts(${JSON.stringify(THREE_URL)},${JSON.stringify(BGU_URL)});\n${src.textContent}\nonmessage=e=>{let r;try{r=runJob(e.data.id);}catch(err){postMessage({i:e.data.i,err:String(err)});return;}const tr=[];const walk=o=>{if(!o||typeof o!=='object')return;if(ArrayBuffer.isView(o)){if(!tr.includes(o.buffer))tr.push(o.buffer);return;}for(const k in o)walk(o[k]);};walk(r);postMessage({i:e.data.i,r},tr);};`;
+    const url=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));for(let k=0;k<n;k++)pool.push(new Worker(url));}catch(e){pool=[];}
+  if(pool.length){let next=0,failed=false;
+    // biggest jobs first so the pool stays busy
+    const order=jobs.map((j,i)=>i).sort((a,b)=>(jobs[a]==='skin'?-2:jobs[a]==='misc'?-1:0)-(jobs[b]==='skin'?-2:jobs[b]==='misc'?-1:0));
+    await new Promise((res)=>{const feed=w=>{if(next>=order.length){w.terminate();return;}const i=order[next++];w.postMessage({id:jobs[i],i});};
+      let out=0,alive=pool.length;const timer=setTimeout(()=>{failed=true;res();},25000);
+      pool.forEach(w=>{w.onmessage=e=>{if(e.data.err){failed=true;}else results[e.data.i]=e.data.r;tick(e.data.i);out++;if(out>=jobs.length){clearTimeout(timer);res();}else feed(w);};w.onerror=()=>{failed=true;w.terminate();alive--;if(alive<=0){clearTimeout(timer);res();}};feed(w);});});
+    pool.forEach(w=>{try{w.terminate();}catch(e){}});if(!failed&&results.every(Boolean)){assemble(results);return 'workers';}}
+  // fallback: one job per frame on the main thread
+  done=results.filter(Boolean).length;for(let i=0;i<jobs.length;i++){if(results[i])continue;await new Promise(r=>setTimeout(r,0));results[i]=runJob(jobs[i]);tick(i);}
+  assemble(results);return 'main';}
+
+/* ================= gait: walking and running poses from a phase in [0,1) ================= */
+const bump=(x,c,w)=>{let d=((x-c)%1+1.5)%1-.5;return Math.exp(-d*d/(2*w*w));};
+const GAIT={
+  rest:{hip:[0,0],knee:[0,0,0,0,0],ank:[0,0,0],arm:[0,0],elb:[8,0],bob:0,twist:0,roll:0,lean:0,hz:0},
+  walk:{hip:[8,19],knee:[4,12,.15,60,.71],ank:[[0,0],[.12,-6],[.42,9],[.62,-16],[.78,4]],arm:[-2,16],elb:[16,10],bob:.016,twist:5,roll:3.5,lean:2,hz:.92,stride:1.42},
+  run:{hip:[14,32],knee:[10,36,.18,105,.72],ank:[[0,0],[.15,14],[.35,-22],[.55,6],[.8,10]],arm:[-6,32],elb:[82,16],bob:.045,twist:8,roll:4,lean:9,hz:1.42,stride:2.6}};
+function ankAt(tab,x){if(!Array.isArray(tab[0]))return 0;x=((x%1)+1)%1;for(let i=0;i<tab.length;i++){const a=tab[i],b=tab[(i+1)%tab.length],bx=i+1<tab.length?b[0]:1;if(x>=a[0]&&x<bx){const t=(x-a[0])/(bx-a[0]);return lerp(a[1],b[1],t*t*(3-2*t));}}return 0;}
+function poseAngles(g,ph,breath){const c=x=>Math.cos(TAU*x),s=x=>Math.sin(TAU*x),R={};
+  for(const [S,o] of [['L',0],['R',.5]]){const x=ph+o,sg=S==='L'?1:-1;
+    R['thigh'+S]=[-(g.hip[0]+g.hip[1]*c(x))*D2R,0,sg*1.5*D2R];
+    R['shin'+S]=[(g.knee[0]+g.knee[1]*bump(x,g.knee[2],.09)+g.knee[3]*bump(x,g.knee[4],.13))*D2R,0,0];
+    R['foot'+S]=[ankAt(g.ank,x)*D2R,0,0];
+    R['arm'+S]=[(g.arm[0]+g.arm[1]*c(x+.5))*D2R,0,0];
+    R['fore'+S]=[-(g.elb[0]+g.elb[1]*(.5+.5*c(x+.5)))*D2R,0,0];
+    R['hand'+S]=[0,0,0];R['clav'+S]=[0,0,sg*breath*.012];}
+  R.hips=[0,g.twist*D2R*c(ph),g.roll*D2R*s(ph*2)*.5];R.spine=[g.lean*.4*D2R,-g.twist*.5*D2R*c(ph),0];R.chest=[g.lean*.6*D2R-breath*.02,-g.twist*.7*D2R*c(ph),0];R.neck=[-g.lean*.7*D2R,g.twist*.6*D2R*c(ph),0];R.head=[-.0*D2R,0,0];
+  return R;}
+function blendAngles(A,B,t){const R={};for(const k in A)R[k]=A[k].map((v,i)=>lerp(v,B[k][i],t));return R;}
+
+</script>
+<script>
+const THREE_URL='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',BGU_URL='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js';
+/* ================= scene ================= */
+const $=id=>document.getElementById(id);
+const stage=$('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();const BG=new THREE.Color(0x0c0d0f);scene.background=BG;
+const camera=new THREE.PerspectiveCamera(32,innerWidth/innerHeight,.05,60);camera.position.set(1.9,1.3,4.7);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);controls.target.set(0,.84,0);controls.enableDamping=true;controls.dampingFactor=.08;controls.minDistance=.3;controls.maxDistance=11;controls.maxPolarAngle=PI*.56;controls.update();
+
+scene.add(new THREE.HemisphereLight(0xdfe6f0,0x2a2522,.55));
+const key=new THREE.DirectionalLight(0xfff3e8,1.55);key.position.set(-2.2,4.2,3.2);key.castShadow=true;key.shadow.mapSize.set(2048,2048);
+Object.assign(key.shadow.camera,{left:-2.6,right:2.6,top:2.4,bottom:-.4,near:.5,far:12});key.shadow.bias=-.0004;key.shadow.normalBias=.012;scene.add(key);
+const rim=new THREE.DirectionalLight(0x9fc4ff,1.1);rim.position.set(2.5,2.6,-3.5);scene.add(rim);
+const fill=new THREE.DirectionalLight(0xffd2b0,.35);fill.position.set(2.5,.6,2);scene.add(fill);
+
+// floor: dark disc with a treadmill grid that moves with the stance foot, fading into the background
+const floorC=document.createElement('canvas');floorC.width=floorC.height=512;{const x=floorC.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,512,512);x.strokeStyle='rgba(255,255,255,.55)';x.lineWidth=2;
+  for(let i=0;i<=512;i+=64){x.beginPath();x.moveTo(i,0);x.lineTo(i,512);x.stroke();x.beginPath();x.moveTo(0,i);x.lineTo(512,i);x.stroke();}}
+const floorT=new THREE.CanvasTexture(floorC);floorT.wrapS=floorT.wrapT=THREE.RepeatWrapping;floorT.repeat.set(10,10);floorT.anisotropy=4;
+const floorMat=new THREE.MeshStandardMaterial({color:0x121316,roughness:1,emissive:0xffffff,emissiveMap:floorT,emissiveIntensity:.03});
+const floor=new THREE.Mesh(new THREE.CircleGeometry(5,96),floorMat);floor.rotation.x=-PI/2;floor.receiveShadow=true;scene.add(floor);
+const fadeC=document.createElement('canvas');fadeC.width=fadeC.height=256;{const x=fadeC.getContext('2d'),g=x.createRadialGradient(128,128,10,128,128,128);g.addColorStop(0,'#000');g.addColorStop(.25,'#000');g.addColorStop(.7,'#fff');g.addColorStop(1,'#fff');x.fillStyle=g;x.fillRect(0,0,256,256);}
+const fade=new THREE.Mesh(new THREE.CircleGeometry(5.01,96),new THREE.MeshBasicMaterial({color:BG,alphaMap:new THREE.CanvasTexture(fadeC),transparent:true,depthWrite:false}));fade.rotation.x=-PI/2;fade.position.y=.002;fade.renderOrder=1;scene.add(fade);
+
+/* ================= materials ================= */
+const P_=(c,o={})=>new THREE.MeshPhysicalMaterial({color:c,roughness:.38,clearcoat:.55,clearcoatRoughness:.3,...o});
+const MATS={
+  skin:new THREE.MeshStandardMaterial({color:0xc99479,roughness:.52,skinning:true,transparent:true}),
+  eye:new THREE.MeshStandardMaterial({color:0xf4f1ea,roughness:.15}),
+  bone:new THREE.MeshStandardMaterial({color:0xe9e0cc,roughness:.62}),
+  tooth:new THREE.MeshStandardMaterial({color:0xf6f2e6,roughness:.3}),
+  cart:new THREE.MeshStandardMaterial({color:0xbcd0d8,roughness:.35}),
+  disc:new THREE.MeshStandardMaterial({color:0x9fb6c4,roughness:.4}),
+  muscle:new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:.5,emissive:0xff4a28,emissiveIntensity:0}),
+  brain:P_(0xe2aaa0,{roughness:.45,clearcoat:.4}),brain2:P_(0xcf8f86,{roughness:.45,clearcoat:.4}),
+  lung:P_(0xd98a8a,{roughness:.55,clearcoat:.25,transparent:true,opacity:.92}),
+  heart:P_(0xa3262a,{clearcoat:.7,clearcoatRoughness:.25}),heart2:P_(0x8e2433,{clearcoat:.7,clearcoatRoughness:.25}),
+  liver:P_(0x7d2e24),gall:P_(0x4f7a3a),stomach:P_(0xd98a78),spleen:P_(0x6e2a48),pancreas:P_(0xe2b26a,{roughness:.5,clearcoat:.3}),
+  kidney:P_(0x8a3428),bladder:P_(0xd8ae72),smallint:P_(0xe5a08c),colon:P_(0xc98468,{roughness:.45}),airway:P_(0xdfd2c8,{roughness:.4,clearcoat:.3}),
+  diaphragm:P_(0xb24a3e,{roughness:.5,clearcoat:.3,transparent:true,opacity:.82,side:THREE.DoubleSide}),
+};
+for(const k in MATS)MATS[k].color.convertSRGBToLinear();floorMat.color.convertSRGBToLinear();
+MATS.art=flowMat(new THREE.Color(0xc0242a).convertSRGBToLinear(),'a');MATS.vein=flowMat(new THREE.Color(0x2d4fae).convertSRGBToLinear(),'v');MATS.nerve=flowMat(new THREE.Color(0xe6c15a).convertSRGBToLinear(),'n');
+MATS.muscle.emissive.convertSRGBToLinear();
+// fibre stripes on the muscles
+{const c=document.createElement('canvas');c.width=256;c.height=4;const x=c.getContext('2d');for(let i=0;i<256;i++){const v=200+Math.round(55*Math.pow(Math.abs(Math.sin(i*.9+Math.sin(i*.13)*3)),3));x.fillStyle=`rgb(${v},${v},${v})`;x.fillRect(i,0,1,4);}
+  const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.repeat.set(3,1);MATS.muscle.map=t;}
+// see-through skin: fresnel rim, the inside shows through the middle
+const XR={value:1};
+MATS.skin.onBeforeCompile=sh=>{sh.uniforms.uX=XR;sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uX;')
+  .replace('#include <tonemapping_fragment>','{float fr=pow(1.-abs(dot(normalize(vNormal),normalize(vViewPosition))),2.2);gl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(.62,.78,1.)*(.18+fr*1.1),uX*.9);gl_FragColor.a=mix(1.,.03+fr*.62,uX);}\n#include <tonemapping_fragment>');};
+
+/* ================= state ================= */
+const LAYERS={skin:true,muscle:false,bone:true,organ:true,vessel:true,nerve:false};
+let mode='walk',gait=GAIT.walk,gaitFrom=GAIT.walk,gaitK=1,phase=0,breathPh=0;const HR={rest:64,walk:96,run:148},RR={rest:14,walk:20,run:32};
+let hr=96,beatPh=0,rr=20,xray=1,xrayT=1,explode=false,figures=[],main=null,ready=false;
+const _a=new V(),HEEL=[new V(.105,.008,-.075),new V(.115,.0,.165)];
+function poseFigure(F,R,dy){const by=F.rig.by;for(const k in R){if(by[k])by[k].rotation.set(...R[k]);}by.hips.position.set(0,J.hips[1]+dy,0);}
+function groundOffset(F){F.root.updateMatrixWorld(true);let m=1e9;for(const S of ['L','R']){const fb=F.rig.by['foot'+S],j=J['foot'+S];for(const p of HEEL){_a.set((S==='L'?p.x:-p.x)-j[0],p.y-j[1],p.z-j[2]);fb.localToWorld(_a);if(_a.y<m)m=_a.y;}}return m;}
+function applyLayers(){for(const F of figures){if(F===main){F.root.visible=!explode;for(const L in LAYERS)F.show(L,LAYERS[L]);}else F.root.visible=explode;}
+  document.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(LAYERS[b.dataset.layer])));}
+function setMode(m){if(m===mode)return;gaitFrom=blendGait();mode=m;gait=GAIT[m];gaitK=0;document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));}
+// smooth change between gaits: blend the parameter sets
+function blendGait(){if(gaitK>=1)return gait;const A=gaitFrom,B=gait,k=gaitK,o={};for(const key in B){const a=A[key],b=B[key];
+    if(typeof b==='number')o[key]=lerp(a||0,b,k);else if(Array.isArray(b)&&Array.isArray(b[0]))o[key]=b.map((row,i)=>[row[0],lerp(a&&Array.isArray(a[0])&&a[i]?a[i][1]:0,row[1],k)]);else if(Array.isArray(b))o[key]=b.map((v,i)=>lerp(a&&a[i]!=null?a[i]:0,v,k));}return o;}
+
+/* ================= build ================= */
+const EXPLODE_X=[-1.9,-.95,0,.95,1.9],EXPLODE_L=[['skin'],['muscle','bone'],['bone'],['organ'],['vessel','nerve']];
+const LBL=['皮肤','肌肉','骨骼','器官','血管 · 神经'].map(t=>{const d=document.createElement('div');d.className='lbl';d.textContent=t;$('lbls').appendChild(d);return d;});
+const _lp=new V();function labelTick(){LBL.forEach((d,i)=>{d.classList.toggle('on',explode);if(!explode)return;_lp.set(EXPLODE_X[i],1.86,0).project(camera);d.style.transform=`translate(${(_lp.x*.5+.5)*innerWidth}px,${(-_lp.y*.5+.5)*innerHeight}px) translate(-50%,-100%)`;});}
+function makeExploded(){if(figures.length>1)return;EXPLODE_L.forEach((ls,i)=>{const F=new Figure(ls,EXPLODE_X[i],MATS);scene.add(F.root);F.root.visible=false;figures.push(F);});}
+async function boot(){const t0=performance.now();
+  const how=await buildGeometryAsync((d,n,id)=>{$('lBar').style.width=(d/n*100).toFixed(0)+'%';$('lS').textContent=loadName(id)+` · ${d}/${n}`;});
+  main=new Figure(['skin','bone','muscle','organ','vessel','nerve'],0,MATS);scene.add(main.root);figures.push(main);applyLayers();
+  let verts=0,meshes=0;scene.traverse(o=>{if(o.isMesh&&o.geometry.attributes.position){verts+=o.geometry.attributes.position.count;meshes++;}});
+  $('stats').textContent=`${meshes} 个部件 · ${(verts/1e4).toFixed(0)} 万个顶点 · 生成用时 ${((performance.now()-t0)/1000).toFixed(1)} 秒`;
+  ready=true;$('load').classList.add('done');setTimeout(()=>{$('hint').style.opacity=1;setTimeout(()=>$('hint').style.opacity=0,4200);},600);console.log('built via',how,Math.round(performance.now()-t0),'ms');}
+
+/* ================= loop ================= */
+const clock=new THREE.Clock();let lastStep=[0,0];
+function frame(){const dt=Math.min(clock.getDelta(),.05);
+  if(ready){gaitK=Math.min(1,gaitK+dt*.8);const g=blendGait();
+    phase=(phase+dt*(g.hz||0))%1;rr+=(RR[mode]-rr)*Math.min(1,dt*.5);breathPh=(breathPh+dt*rr/60)%1;const br=.5-.5*Math.cos(TAU*breathPh);
+    hr+=(HR[mode]-hr)*Math.min(1,dt*.35);beatPh+=dt*hr/60;if(beatPh>=1){beatPh-=1;onBeat();}
+    const aSys=bump(beatPh,.04,.04),vSys=Math.max(0,Math.sin(clamp((beatPh-.1)/.3,0,1)*PI));
+    FLOW.beat.value=beatPh*60/hr;FLOW.time.value+=dt;FLOW.spark.value=mode==='rest'?.35:1;
+    const ST={breath:br,aSys,vSys},R=poseAngles(g,phase,br);
+    for(const F of figures){if(!F.root.visible)continue;poseFigure(F,R,0);const m=groundOffset(F);poseFigure(F,R,-m);F.root.updateMatrixWorld(true);organUpdate(F,ST);muscleUpdate(F,dt,1);}
+    // footfalls: a soft step sound at each heel strike
+    for(const [i,o] of [[0,0],[1,.5]]){const x=((phase+o)%1);if(lastStep[i]>.9&&x<.1&&(g.hz||0)>.3)Sfx.step(mode==='run'?1:.6);lastStep[i]=x;}
+    floorT.offset.y=(floorT.offset.y-dt*(g.stride||0)*(g.hz||0))%1;
+    xray+=(xrayT-xray)*Math.min(1,dt*3);XR.value=xray;MATS.skin.depthWrite=xray<.05;
+    vitals(dt,beatPh,vSys,g);}
+  tourTick(dt);camTick(dt);viewOff+=(((tour?.15:.07)+(innerWidth<720?.05:0))*innerHeight-viewOff)*Math.min(1,dt*3);camera.setViewOffset(innerWidth,innerHeight,0,viewOff,innerWidth,innerHeight);controls.update();labelTick();renderer.render(scene,camera);requestAnimationFrame(frame);}
+function fitCam(){camera.aspect=innerWidth/innerHeight;camera.fov=camera.aspect<1?32+(1-camera.aspect)*34:32;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);}
+addEventListener('resize',fitCam);fitCam();
+
+/* ================= camera tween ================= */
+let camTw=null,viewOff=0;
+function camTo(p,q,dur=1.8){camTw={p0:camera.position.clone(),q0:controls.target.clone(),p1:new V(...p),q1:new V(...q),t:0,dur};}
+function camTick(dt){if(!camTw)return;camTw.t+=dt/camTw.dur;const k=camTw.t>=1?1:1-Math.pow(1-camTw.t,3);camera.position.lerpVectors(camTw.p0,camTw.p1,k);controls.target.lerpVectors(camTw.q0,camTw.q1,k);if(camTw.t>=1)camTw=null;}
+controls.addEventListener('start',()=>{camTw=null;});
+
+/* ================= controls ================= */
+document.querySelectorAll('[data-layer]').forEach(b=>b.addEventListener('click',()=>{const L=b.dataset.layer;LAYERS[L]=!LAYERS[L];if(explode)setExplode(false);applyLayers();}));
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+function setXray(v){xrayT=v?1:0;$('bX').setAttribute('aria-pressed',String(v));if(v&&!LAYERS.skin){LAYERS.skin=true;applyLayers();}}
+$('bX').addEventListener('click',()=>setXray(!(xrayT>.5)));
+function setExplode(v,cam=true){if(v)makeExploded();explode=v;$('bE').setAttribute('aria-pressed',String(v));applyLayers();if(cam){if(v)camTo([0,1.3,7.2],[0,.92,0]);else camTo([1.9,1.3,4.7],[0,.84,0]);}}
+$('bE').addEventListener('click',()=>setExplode(!explode));
+
+requestAnimationFrame(frame);boot();
+window.__cam=(p,q,f)=>{camTw=null;camera.position.set(...p);controls.target.set(...q);if(f){camera.fov=f;camera.updateProjectionMatrix();}controls.update();};
+window.__mode=m=>setMode(m);window.__show=(L,v)=>{LAYERS[L]=v;applyLayers();};window.__xray=v=>{xrayT=xray=v;};window.__explode=v=>setExplode(v,false);window.__ready=()=>ready;window.__info=()=>JSON.stringify(renderer.info.render)+' '+JSON.stringify(renderer.info.memory);window.__step=i=>{if(!tour)tour={i:0,t:0,paused:true};$('cap').classList.add('on');tourGo(i);tour.paused=true;if(camTw)camTw.t=.999;xray=xrayT;};
+
+/* ================= names and notes for everything you can click ================= */
+const INFO={
+  skin:['皮肤','人体最大的器官','成年人的皮肤展开约 1.8 平方米，重约 4 千克。它挡住细菌、保持水分、调节体温，也是触觉的入口。'],
+  skull:['颅骨','保护大脑','由 22 块骨头拼成，成年后大多已经愈合在一起。眼眶、鼻腔和颧弓都在这里。'],mandible:['下颌骨','全身唯一能动的颅骨','咀嚼时绕耳前的关节转动，咬合力可达几百牛顿。'],teeth:['牙齿','人体最硬的组织','牙釉质是人体最坚硬的物质，成年人有 32 颗恒牙。'],
+  vert_neck:['颈椎','7 块','最灵活的一段脊柱，支撑着约 5 千克重的头部。'],vert_chest:['胸椎','12 块','每一块都连着一对肋骨，共同围成胸廓。'],vert_spine:['腰椎','5 块','脊柱里最粗壮的椎骨，承受上半身的大部分重量。'],
+  pelvis:['骨盆','连接躯干和双腿','髋骨、骶骨围成一个环，把上半身的重量分到两条腿上，也托住腹腔里的器官。'],clav:['锁骨','唯一横着的长骨','把手臂和躯干连在一起，是最常见的骨折部位之一。'],scap:['肩胛骨','贴在背后的三角形骨板','手臂抬起时，它会在胸廓上滑动、旋转。'],
+  humerus:['肱骨','上臂骨','上端是圆形的肱骨头，嵌在肩关节窝里，活动范围是全身最大的关节。'],ulna:['尺骨','前臂内侧','肘部尖尖的鹰嘴就是尺骨的一端。'],radius:['桡骨','前臂外侧','转动手腕时，桡骨绕着尺骨翻转。'],hand:['手骨','27 块','腕骨、掌骨和指骨，让手能完成从握拳到穿针的各种动作。'],
+  femur:['股骨','人体最长最结实的骨头','约占身高的四分之一，能承受自身体重几十倍的力量。'],patella:['髌骨','膝盖骨','埋在股四头肌腱里，像滑轮一样让伸膝更省力。'],tibia:['胫骨','小腿前侧','小腿前面摸到的硬骨头就是它，承担小腿的主要负重。'],fibula:['腓骨','小腿外侧','细长，主要供肌肉附着，并构成外脚踝。'],foot:['足骨','26 块','足弓像弹簧，走路和跑步时吸收冲击、储存能量。'],
+  ribs:['肋骨','12 对','和胸椎、胸骨一起围成胸廓，保护心和肺；呼吸时肋骨会向上向外抬起。'],cart:['肋软骨','有弹性的连接','让胸廓在呼吸时可以扩张。'],sternum:['胸骨','胸前正中','肋骨在前方汇合的地方，心脏就在它后面。'],
+  brain:['大脑','约 1.4 千克','约 860 亿个神经元。表面的褶皱（脑回）让皮层面积扩大到约 2500 平方厘米。'],cerebellum:['小脑','负责平衡和协调','虽然只占脑重的十分之一，却拥有一半以上的神经元。走路时它在不停地微调每一步。'],stem:['脑干','生命中枢','控制心跳、呼吸等不需要思考的基本活动，并连接大脑和脊髓。'],
+  eyeL:['眼球','直径约 2.4 厘米','每秒可以处理大量视觉信息，通过视神经送往大脑。'],eyeR:['眼球','直径约 2.4 厘米','每秒可以处理大量视觉信息，通过视神经送往大脑。'],
+  lungL:['左肺','两叶','为给心脏腾出位置，左肺比右肺小，内侧有一个心切迹。'],lungR:['右肺','三叶','两片肺里约有 3 亿个肺泡，展开面积接近一个网球场。'],
+  ventricles:['心室','心脏的主泵','左心室把血泵向全身，右心室把血泵向肺。每次收缩约射出 70 毫升血液。'],atria:['心房','心脏的前厅','先于心室收缩，把血液挤进心室；心电图上的 P 波就是它的信号。'],
+  liver:['肝脏','最大的内脏','约 1.5 千克，参与代谢、解毒、合成蛋白质，还分泌胆汁。'],gall:['胆囊','储存胆汁','进食后收缩，把胆汁送进小肠帮助消化脂肪。'],stomach:['胃','J 形的肌肉袋','可以容纳 1 升以上的食物，用胃酸和蛋白酶开始消化。'],spleen:['脾脏','血液的过滤器','清除衰老的红细胞，也是重要的免疫器官。'],pancreas:['胰腺','消化与血糖','分泌消化酶，也分泌胰岛素来调节血糖。'],
+  kidneyL:['肾脏','每天过滤约 180 升血浆','最后只留下 1.5 升左右的尿液，其余的水和养分都被重新吸收。'],kidneyR:['肾脏','每天过滤约 180 升血浆','最后只留下 1.5 升左右的尿液，其余的水和养分都被重新吸收。'],adrenalL:['肾上腺','压力激素','分泌肾上腺素，跑步时让心跳加快、血管扩张。'],adrenalR:['肾上腺','压力激素','分泌肾上腺素，跑步时让心跳加快、血管扩张。'],
+  bladder:['膀胱','储存尿液','可以容纳约 400–600 毫升。'],smallint:['小肠','长约 5–6 米','食物中的大部分营养在这里被吸收。内壁的绒毛让吸收面积达到约 30 平方米。'],colon:['大肠','长约 1.5 米','吸收水分，形成粪便；表面一节一节的鼓起叫结肠袋。'],
+  esoph:['食管','约 25 厘米','靠一波波的蠕动把食物送进胃里，倒立也能吞咽。'],trachea:['气管','由 C 形软骨环撑开','空气从这里进入，再分成左右支气管通向两肺。'],bronchL:['支气管','左支','在肺里不断分叉，约 23 级后到达肺泡。'],bronchR:['支气管','右支','比左支更短更直。'],diaphragm:['膈肌','最重要的呼吸肌','吸气时收缩下降，让胸腔变大；它是一块穹顶形的肌肉。'],
+  disc:['椎间盘','脊柱的减震垫',''],eye:['眼球','',''],
+};
+const SYS={muscle:['肌肉','骨骼肌'],vessel:['血管','循环系统'],nerve:['神经','神经系统']};
+const MUSCLE_NOTE='骨骼肌只会收缩（拉），不会推。每块肌肉都连接两块骨头，收缩时变短变粗，带动关节转动。亮起来的表示它此刻正在收缩发力。';
+const VNOTE={art:'动脉把含氧丰富的血液从心脏送往全身；每次心跳都会推出一道脉搏波。',vein:'静脉把血液送回心脏；它们壁薄、压力低，依靠瓣膜和肌肉挤压回流。',nerve:'神经把电信号在大脑和身体之间来回传递，最快的信号每秒约 100 米。'};
+function infoFor(key){if(!key)return null;
+  if(key.startsWith('muscle:'))return [key.slice(7),'骨骼肌',MUSCLE_NOTE];
+  if(key.startsWith('vessel:')){const n=key.slice(7);const vein=/静脉/.test(n)&&n!=='肺静脉',pa=n==='肺动脉';return [n,vein||pa?'血管 · 蓝色':'血管 · 红色',pa?'肺动脉把缺氧的血从右心室送到肺里换气，所以虽然叫动脉，却画成蓝色。':n==='肺静脉'?'肺静脉把在肺里吸足氧气的血送回左心房，所以虽然叫静脉，却画成红色。':vein?VNOTE.vein:VNOTE.art];}
+  if(key.startsWith('nerve:'))return [key.slice(6),'神经',VNOTE.nerve];
+  const k=key.replace(/[LR]$/,'');const v=INFO[key]||INFO[k];return v||null;}
+function loadName(id){if(!id)return '';if(id==='skin')return '皮肤';if(id==='misc')return '肋骨、血管与神经';if(id.startsWith('bone:')){const p=skeletonParts()[+id.slice(5)];const v=infoFor(p.key);return v?v[0]:'骨骼';}
+  if(id.startsWith('organ:')){const o=organDefs()[+id.slice(6)];const v=infoFor(o.key);return v?v[0]:'器官';}return id;}
+
+/* ================= click to identify ================= */
+const ray=new THREE.Raycaster();let downAt=null;
+renderer.domElement.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY];});
+renderer.domElement.addEventListener('pointerup',e=>{if(!downAt||Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])>6||!ready)return;downAt=null;
+  const m=new THREE.Vector2(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);ray.setFromCamera(m,camera);
+  const list=[];for(const F of figures){if(!F.root.visible)continue;for(const L in F.layers){for(const o of F.layers[L])if(o.visible&&!(L==='skin'&&xray>.5))list.push(o);}}
+  // skinned meshes are hit-tested in their bind pose, close enough for picking
+  const hits=ray.intersectObjects(list,false);const h=hits.find(x=>x.object.userData.info);showInfo(h?h.object.userData.info:null);});
+let infoTimer=0;
+function showInfo(key){const v=infoFor(key);const box=$('info');if(!v){box.classList.remove('on');return;}$('iT').textContent=v[0];$('iS').textContent=v[1];$('iP').textContent=v[2];box.classList.add('on');clearTimeout(infoTimer);infoTimer=setTimeout(()=>box.classList.remove('on'),9000);}
+$('iX').addEventListener('click',()=>$('info').classList.remove('on'));
+
+/* ================= vital signs monitor ================= */
+const ecgC=$('ecg'),ecgX=ecgC.getContext('2d');let ecgPos=0,ecgPrev=null,vLast=0;
+function ecgAt(p){return .12*bump(p,.035,.018)-.12*bump(p,.088,.006)+1*bump(p,.1,.007)-.28*bump(p,.113,.006)+.28*bump(p,.34,.035);}
+function vitals(dt,ph,vSys,g){const W=ecgC.width,H=ecgC.height,speed=150;const n=Math.max(1,Math.round(dt*speed));
+  for(let i=0;i<n;i++){const p=(ph-(n-1-i)*(hr/60)/speed+1)%1,y=H*.68-ecgAt(p)*H*.55;ecgX.fillStyle='#0c0d0f';ecgX.fillRect(ecgPos,0,10,H);
+    ecgX.strokeStyle='#58d39a';ecgX.lineWidth=2.2;ecgX.beginPath();if(ecgPrev!=null&&ecgPos>0){ecgX.moveTo(ecgPos-1,ecgPrev);ecgX.lineTo(ecgPos,y);}ecgX.stroke();ecgPrev=y;ecgPos=(ecgPos+1)%W;if(ecgPos===0)ecgPrev=null;}
+  if(performance.now()-vLast>250){vLast=performance.now();$('vHR').firstChild.nodeValue=Math.round(hr);$('vRR').textContent=Math.round(rr);$('vCad').textContent=Math.round((g.hz||0)*120);$('vPhase').textContent=vSys>.05?'心室收缩':'舒张期';}}
+
+/* ================= audio: one context unlocked by the first touch; music bed, narration, body sounds ================= */
+const AudioKit=(()=>{let ctx=null,master=null,unlocked=false,err='';const bufs={},pending={},subs=[];
+  function ensure(){try{if(!ctx){const C=window.AudioContext||window.webkitAudioContext;if(!C){err='no-webaudio';return null;}ctx=new C();master=ctx.createGain();master.connect(ctx.destination);
+        try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}ctx.onstatechange=()=>subs.forEach(f=>f());}
+      if(ctx.state!=='running'){const p=ctx.resume();if(p&&p.catch)p.catch(()=>{});}
+      if(!unlocked){const b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();s.buffer=b;s.connect(master);s.start(0);unlocked=true;
+        try{const a=document.createElement('audio');a.setAttribute('playsinline','');a.loop=true;a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';const p=a.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
+    }catch(e){err=String(e);}subs.forEach(f=>f());return ctx;}
+  ['pointerdown','touchend','keydown','click'].forEach(ev=>addEventListener(ev,ensure,{capture:true,passive:true}));
+  function load(url){if(bufs[url])return Promise.resolve(bufs[url]);if(pending[url])return pending[url];
+    pending[url]=fetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();})
+      .then(a=>new Promise((res,rej)=>{const c=ensure();if(!c)return rej(new Error('no audio'));const p=c.decodeAudioData(a,res,rej);if(p&&p.catch)p.catch(rej);}))
+      .then(b=>bufs[url]=b).catch(e=>{delete pending[url];err=String(e.message||e);subs.forEach(f=>f());throw e;});return pending[url];}
+  return {ensure,load,onChange:f=>subs.push(f),get ctx(){return ctx},get master(){return master},state:()=>ctx?ctx.state:'none',error:()=>err};})();
+let soundOn=false;
+const Music={buf:null,gain:null,src:null,on:false,
+  async start(){if(this.on)return;this.on=true;const c=AudioKit.ensure();if(!c)return;try{if(!this.buf)this.buf=await AudioKit.load('music_bed.mp3');}catch(e){this.on=false;return;}if(!this.on)return;
+    this.gain=c.createGain();this.gain.gain.value=0;this.gain.connect(AudioKit.master);const s=c.createBufferSource();s.buffer=this.buf;s.loop=true;s.connect(this.gain);s.start();this.src=s;this.gain.gain.setTargetAtTime(.42,c.currentTime,1.2);},
+  stop(){this.on=false;const g=this.gain,s=this.src,c=AudioKit.ctx;if(g&&c){g.gain.setTargetAtTime(0,c.currentTime,.4);setTimeout(()=>{try{s.stop();}catch(e){}},1600);}this.gain=null;this.src=null;},
+  duck(v){const c=AudioKit.ctx;if(this.gain&&c)this.gain.gain.setTargetAtTime(v?.16:.42,c.currentTime,.35);}};
+const Sfx={bus:null,noise:null,
+  init(){const c=AudioKit.ensure();if(!c||this.bus)return c;this.bus=c.createGain();this.bus.gain.value=.9;this.bus.connect(AudioKit.master);
+    const n=c.createBuffer(1,c.sampleRate,c.sampleRate),d=n.getChannelData(0);let b=0;for(let i=0;i<d.length;i++){b=(b+.02*(Math.random()*2-1))/1.02;d[i]=b*3.5;}this.noise=n;
+    // breathing: filtered noise whose level follows the breath
+    const s=c.createBufferSource();s.buffer=n;s.loop=true;const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=900;f.Q.value=.6;this.breathG=c.createGain();this.breathG.gain.value=0;s.connect(f);f.connect(this.breathG);this.breathG.connect(this.bus);s.start();return c;},
+  thump(t,f0,amp){const c=AudioKit.ctx;const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f0*.55,t+.12);
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(amp,t+.012);g.gain.exponentialRampToValueAtTime(.0005,t+.2);o.connect(g);g.connect(this.bus);o.start(t);o.stop(t+.25);},
+  beat(){if(!soundOn||!this.bus)return;const c=AudioKit.ctx,t=c.currentTime+.01;const k=speaking?.5:1;this.thump(t,62,.55*k);this.thump(t+.26*Math.min(1,64/hr*1.1),74,.38*k);},
+  step(v){if(!soundOn||!this.bus)return;const c=AudioKit.ctx,t=c.currentTime;const s=c.createBufferSource();s.buffer=this.noise;const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=380;const g=c.createGain();
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.32*v,t+.008);g.gain.exponentialRampToValueAtTime(.0005,t+.13);s.connect(f);f.connect(g);g.connect(this.bus);s.start(t,Math.random()*.5);s.stop(t+.2);},
+  breath(b){if(!this.breathG)return;const c=AudioKit.ctx;this.breathG.gain.setTargetAtTime(soundOn?(.012+.03*b)*(mode==='run'?1.6:1):0,c.currentTime,.12);}};
+function onBeat(){Sfx.beat();}
+setInterval(()=>{if(ready)Sfx.breath(Math.max(0,Math.sin(TAU*breathPh)));},120);
+function preloadVoice(){VO.forEach(id=>AudioKit.load('narration/'+id+'.mp3').catch(()=>{}));}
+function setSound(v){soundOn=v;if(v)preloadVoice();$('bS').setAttribute('aria-pressed',String(v));$('bS').textContent=v?'声音 开':'声音 关';if(v){Sfx.init();Music.start();}else{Music.stop();hush();}}
+$('bS').addEventListener('click',()=>setSound(!soundOn));
+
+/* narration: decoded MiniMax clip → plain <audio> → browser speech */
+const VO=new Set(['01','02','03','04','05','06','07','08','09','10','11']);const clipLen={'01':13.9,'02':8.1,'03':15.8,'04':13.6,'05':12.8,'06':11.3,'07':12.8,'08':13.5,'09':9.1,'10':11.8,'11':12.6};
+const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;let zhVoice=null,speaking=false,clip=null,voiceSrc=null,voiceGain=null,voiceTok=0;
+function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/zh[-_]CN/i.test(v.lang)&&/Ting|Xiaoxiao|Yun|Google/i.test(v.name))||vs.find(v=>/zh[-_]CN/i.test(v.lang))||vs.find(v=>/^zh/i.test(v.lang))||null;}
+if(TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
+function hush(){voiceTok++;if(voiceSrc){try{voiceSrc.onended=null;voiceSrc.stop();}catch(e){}voiceSrc=null;}if(clip){try{clip.pause();}catch(e){}clip=null;}if(TTS)try{speechSynthesis.cancel();}catch(e){}speaking=false;Music.duck(false);}
+function sayTTS(text){if(!TTS)return;const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';if(zhVoice)u.voice=zhVoice;u.rate=1.05;u.onstart=()=>{speaking=true;Music.duck(true);};u.onend=u.onerror=()=>{speaking=false;Music.duck(false);};speaking=true;try{speechSynthesis.speak(u);}catch(e){speaking=false;}}
+function say(text,id){if(!soundOn||!text)return;hush();const tok=voiceTok;speaking=true;Music.duck(true);const url='narration/'+id+'.mp3';
+  if(!VO.has(id)){sayTTS(text);return;}
+  AudioKit.load(url).then(buf=>{if(tok!==voiceTok)return;const c=AudioKit.ensure();if(!voiceGain){voiceGain=c.createGain();voiceGain.connect(AudioKit.master);}
+      const s=c.createBufferSource();s.buffer=buf;s.connect(voiceGain);s.onended=()=>{if(voiceSrc===s){voiceSrc=null;speaking=false;Music.duck(false);}};voiceSrc=s;s.start();})
+    .catch(()=>{if(tok!==voiceTok)return;const a=new Audio(url);clip=a;a.onended=()=>{if(clip===a){clip=null;speaking=false;Music.duck(false);}};a.onerror=()=>{if(clip===a){clip=null;sayTTS(text);}};a.play().catch(()=>{if(clip===a){clip=null;sayTTS(text);}});});}
+function soundStatus(){const st=AudioKit.state();$('cSnd').textContent=!soundOn?'静音':st==='running'?(VO.size?'配音':'语音合成'):'点一下画面开启声音';}
+AudioKit.onChange(soundStatus);
+
+/* ================= guided tour ================= */
+const NARR={
+ '01':'这是一个完全由代码生成的人体。没有导入任何模型，皮肤、骨骼、肌肉、器官、血管和神经，都是用数学函数一点一点“雕”出来的。而且，它是活的。',
+ '02':'把皮肤调成半透明，里面的一切都在工作：心脏在跳，肺在呼吸，血液在流动。',
+ '03':'骨骼是身体的支架。成年人有两百零六块骨头，这里做出了其中主要的部分：颅骨、脊柱、肋骨、骨盆和四肢。行走时，它们绕着关节转动，脚掌始终踩在地面上。',
+ '04':'肌肉只会拉，不会推。每一块都连着两块骨头，收缩时变短、变粗。正在用力收缩的肌肉会亮起来：迈步时，大腿前侧和小腿后侧轮流发力。',
+ '05':'心脏每分钟跳动六十到一百次。心房先收缩，把血液挤进心室；紧接着心室收缩，把血液泵向全身。右上角的心电图，和这里的每一次跳动同步。',
+ '06':'吸气时，膈肌收缩下降，胸腔变大，两片肺随之膨胀。安静时每分钟呼吸十几次，每次吸入大约半升空气。',
+ '07':'红色是动脉，把富含氧气的血液从心脏送出去，每次心跳都会推出一道脉搏波；蓝色是静脉，把血液带回心脏。血液在全身循环一圈，大约只需要一分钟。',
+ '08':'黄色的是神经。大脑通过脊髓和周围神经向全身发出指令，最快的信号每秒能跑一百米。行走时，一道道信号沿着坐骨神经传到腿部，指挥肌肉收缩。',
+ '09':'腹腔里是消化系统：胃、肝脏、胰腺，还有盘绕的小肠和大肠。成年人的小肠展开后，有五到六米长。',
+ '10':'现在开始跑步。心率升到每分钟一百五十次左右，呼吸也随之加快，腿部肌肉更用力地交替收缩。这些变化，都是同一套规则实时算出来的。',
+ '11':'最后，把它拆成五层并排放在一起：皮肤、肌肉、骨骼、器官，以及血管和神经。它们由同一副骨架驱动，步调完全一致。'};
+const ALL={skin:false,muscle:false,bone:false,organ:false,vessel:false,nerve:false};
+const STEPS=[
+ {id:'01',t:'一个由代码生成的人',L:{skin:true},x:0,mode:'walk',cam:[[1.9,1.45,4.2],[0,1.0,0]],d:12},
+ {id:'02',t:'透视',L:{skin:true,bone:true,organ:true,vessel:true},x:1,mode:'walk',cam:[[-1.3,1.45,3.2],[0,1.05,0]],d:9},
+ {id:'03',t:'骨骼',L:{bone:true},x:0,mode:'walk',cam:[[2.4,1.2,2.6],[0,.9,0]],d:13},
+ {id:'04',t:'肌肉',L:{muscle:true,bone:true},x:0,mode:'walk',cam:[[2.1,1.0,2.3],[0,.72,0]],d:13},
+ {id:'05',t:'心脏',L:{organ:true,vessel:true},x:0,mode:'rest',cam:[[.22,1.3,.5],[.01,1.24,.03]],d:13},
+ {id:'06',t:'呼吸',L:{organ:true,bone:true},x:0,mode:'rest',cam:[[-.5,1.36,.95],[0,1.24,0]],d:11},
+ {id:'07',t:'血液循环',L:{vessel:true,organ:true},x:0,mode:'walk',cam:[[1.2,1.35,2.7],[0,1.0,0]],d:13},
+ {id:'08',t:'神经',L:{nerve:true,bone:true,organ:false},x:0,mode:'walk',cam:[[-1.3,1.15,-2.0],[0,.85,0]],d:13},
+ {id:'09',t:'消化系统',L:{organ:true,bone:true},x:0,mode:'rest',cam:[[.6,1.12,1.15],[0,1.04,.03]],d:11},
+ {id:'10',t:'跑起来',L:{skin:true,bone:true,organ:true,vessel:true,muscle:false},x:1,mode:'run',cam:[[2.6,1.3,2.6],[0,.95,0]],d:12},
+ {id:'11',t:'五层拆开',L:{},x:0,mode:'walk',explode:true,cam:[[0,1.3,7.2],[0,.92,0]],d:13}];
+let tour=null;
+function tourStart(){setSound(true);tour={i:-1,t:0,paused:false};document.body.classList.add('touring');$('cap').classList.add('on');$('info').classList.remove('on');tourGo(0);}
+function tourStop(){tour=null;hush();document.body.classList.remove('touring');$('cap').classList.remove('on');}
+function stepDur(st){const a=clipLen[st.id],b=TTS&&soundOn&&!VO.has(st.id)?NARR[st.id].length*.24+1:0;return Math.max(st.d,(a||0)+1.2,b);}
+function tourGo(i){if(i<0)i=0;if(i>=STEPS.length){tourStop();return;}const st=STEPS[i];tour.i=i;tour.t=0;tour.dur=stepDur(st);
+  if(st.explode)setExplode(true,false);else{if(explode)setExplode(false,false);Object.assign(LAYERS,ALL,st.L);applyLayers();}
+  setXray(!!st.x);setMode(st.mode);camTo(...st.cam,2.4);
+  $('cT').textContent=st.t;$('cN').textContent=`${i+1} / ${STEPS.length}`;$('cP').textContent=NARR[st.id];say(NARR[st.id],st.id);soundStatus();}
+function tourTick(dt){if(!tour||tour.paused||!ready)return;tour.t+=dt;$('cBar').style.width=Math.min(100,tour.t/tour.dur*100).toFixed(1)+'%';if(tour.t>=tour.dur&&!speaking)tourGo(tour.i+1);}
+$('bTour').addEventListener('click',()=>{if(!ready)return;tour?tourStop():tourStart();});
+$('cX').addEventListener('click',tourStop);$('cNext').addEventListener('click',()=>tour&&tourGo(tour.i+1));$('cPrev').addEventListener('click',()=>tour&&tourGo(tour.i-1));
+$('cPause').addEventListener('click',()=>{if(!tour)return;tour.paused=!tour.paused;$('cPause').textContent=tour.paused?'继续':'暂停';const c=AudioKit.ctx;if(c){try{tour.paused?c.suspend():c.resume();}catch(e){}}if(TTS)try{tour.paused?speechSynthesis.pause():speechSynthesis.resume();}catch(e){}});
+addEventListener('keydown',e=>{if(!tour)return;if(e.key==='ArrowRight')tourGo(tour.i+1);if(e.key==='ArrowLeft')tourGo(tour.i-1);if(e.key==='Escape')tourStop();});
+
+</script>

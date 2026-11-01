@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>代码造的 3D 作品集</title>
-<meta name="description" content="两个完全由代码生成的可交互 3D 场景：陀飞轮万年历机械表、机场停机坪过站模拟。">
+<meta name="description" content="三个完全由代码生成的可交互 3D 场景：会动的人体解剖、陀飞轮万年历机械表、机场停机坪过站模拟。">
 <meta property="og:title" content="代码造的 3D 作品集">
-<meta property="og:description" content="陀飞轮万年历机械表 · 机场停机坪 45 分钟过站模拟，单个 HTML 文件，浏览器直接打开。">
-<meta property="og:image" content="apron/preview.jpg">
+<meta property="og:description" content="会动的人体解剖 · 陀飞轮万年历机械表 · 机场停机坪 45 分钟过站模拟，单个 HTML 文件，浏览器直接打开。">
+<meta property="og:image" content="body/preview.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <style>
 :root{--bg:#0d0e10;--fg:#ecebe6;--mut:#8e8c86;--line:#26272b;--card:#141518;--acc:#c9a46a}
@@ -17,7 +17,7 @@ main{max-width:1080px;margin:0 auto;padding:72px 20px 56px}
 .k{font-size:12px;letter-spacing:.24em;color:var(--acc);text-transform:uppercase}
 h1{font-size:clamp(30px,5vw,48px);font-weight:600;letter-spacing:.02em;margin:14px 0 12px;line-height:1.2}
 .lead{color:var(--mut);max-width:620px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:22px;margin-top:48px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:22px;margin-top:48px}
 a.c{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:border-color .25s,transform .25s}
 a.c:hover{border-color:#4a4b50;transform:translateY(-3px)}
 .img{aspect-ratio:16/10;background:#000 center/cover no-repeat;position:relative}
@@ -39,6 +39,15 @@ footer a{color:var(--fg)}
   <p class="lead">每个零件、每辆车、每段动画都由代码生成，没有导入任何模型文件。打开即可拖动、缩放、点击查看，或者一键播放带配音的讲解。建议戴耳机。</p>
 
   <div class="grid">
+    <a class="c" href="body/">
+      <div class="img" style="background-image:url(body/preview.jpg)"></div>
+      <div class="b">
+        <h2>人体</h2>
+        <p>皮肤、骨骼、肌肉、器官、血管和神经全部现场生成。心脏按心率跳，肺随呼吸起伏，血在血管里流，走路时肌肉随之收缩发力。</p>
+        <ul><li>六层透视</li><li>静息 / 行走 / 跑步</li><li>心电图同步</li><li>11 段配音讲解</li></ul>
+        <div class="go">打开 →</div>
+      </div>
+    </a>
     <a class="c" href="watch/">
       <div class="img" style="background-image:url(watch/preview.jpg)"></div>
       <div class="b">
