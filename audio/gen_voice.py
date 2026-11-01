@@ -1,6 +1,7 @@
 """用 MiniMax 为讲解生成配音（参数与 38-billion-years-video 的 src/series.py 一致）。
 
 在 GitHub Actions 里自动运行（见 .github/workflows/voice.yml），也可以本地运行：
+  python3 audio/gen_voice.py [文案.json] [输出目录]
   export MINIMAX_API_KEY=...
   export MINIMAX_URL=https://api.minimaxi.com/v1/t2a_v2   # 国内账号（默认）；海外账号用 https://api.minimax.io/v1/t2a_v2
   python3 audio/gen_voice.py
@@ -14,8 +15,11 @@ VOICE = os.environ.get('MINIMAX_VOICE') or 'Chinese (Mandarin)_Gentleman'
 MODEL = os.environ.get('MINIMAX_MODEL') or 'speech-2.6-hd'
 SPEED = float(os.environ.get('MINIMAX_SPEED') or '1.0')
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-lines = json.load(open(os.path.join(root, 'audio', 'narration.json'), encoding='utf-8'))
-out = os.path.join(root, 'narration'); os.makedirs(out, exist_ok=True)
+# 可选参数：文案 json 和输出目录（默认是手表的 audio/narration.json → narration/）
+src = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, 'audio', 'narration.json')
+out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, 'narration')
+lines = json.load(open(src, encoding='utf-8'))
+os.makedirs(out, exist_ok=True)
 mpath = os.path.join(out, 'manifest.json')
 manifest = json.load(open(mpath, encoding='utf-8')) if os.path.exists(mpath) else {}
 ffmpeg = shutil.which('ffmpeg')
