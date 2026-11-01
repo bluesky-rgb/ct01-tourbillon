@@ -83,6 +83,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0;height:22px}
 .btn.tog[aria-pressed="false"]{opacity:.5;text-decoration:line-through}
 .demo-ctl{display:flex;align-items:center;gap:6px}
 .demo-ctl .play{min-width:4.2em}
+.demo-tip.warn{color:var(--accent);font-weight:600;cursor:pointer}
 .demo-tip{flex:1;min-width:0;font-size:11.5px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:420px){.demo-tip{display:none}.demo-ctl{justify-content:space-between}}
 .btn.stop{flex:none;padding:7px 14px;font-size:13px}
@@ -156,7 +157,7 @@ details[open] summary::before{transform:rotate(45deg)}
       <button class="btn tog" id="btnPrev" aria-label="上一步">‹</button>
       <button class="btn tog play" id="btnPause">暂停</button>
       <button class="btn tog" id="btnNext" aria-label="下一步">›</button>
-      <span class="demo-tip">可随时拖动、缩放</span>
+      <span class="demo-tip" id="dState" role="button" tabindex="0">可随时拖动、缩放</span>
       <button class="btn tog" id="btnVoice" aria-pressed="true">配音</button>
       <button class="btn tog" id="btnMusic" aria-pressed="true">音乐</button>
     </div>
@@ -822,13 +823,31 @@ function updateStats(){const t=((mt%86400)+86400)%86400,c=cal(mt),age=(((mt+TZ)/
 
 
 /* ticking: synthesized escapement clicks, only near real time */
-let audio=null,noise=null,soundOn=false,lastBeat=-1;
+let noise=null,soundOn=false,lastBeat=-1;
 const bSnd=$('btnSound');
 /* ================= audio: shared context, narration, ambient score ================= */
-function getAudio(){if(!audio){audio=new (window.AudioContext||window.webkitAudioContext)();noise=audio.createBuffer(1,audio.sampleRate*.05,audio.sampleRate);const d=noise.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,3);}audio.resume();return audio;}
+/* ================= AudioKit: one audio context, unlocked by the first touch or click anywhere ================= */
+// Narration and music are decoded into buffers and played through this context, so later clips need no new
+// user gesture (mobile browsers block media started outside one), and iOS plays through the silent switch.
+const AudioKit=(()=>{let ctx=null,master=null,unlocked=false,err='';const bufs={},pending={},subs=[];
+  function ensure(){try{if(!ctx){const C=window.AudioContext||window.webkitAudioContext;if(!C){err='no-webaudio';return null;}ctx=new C();master=ctx.createGain();master.connect(ctx.destination);
+        try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}ctx.onstatechange=()=>subs.forEach(f=>f());}
+      if(ctx.state!=='running'){const p=ctx.resume();if(p&&p.catch)p.catch(()=>{});}
+      if(!unlocked){const b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();s.buffer=b;s.connect(master);s.start(0);unlocked=true;
+        // a silent media element switches iOS to the playback audio session, so the ringer switch does not mute us
+        try{const a=document.createElement('audio');a.setAttribute('playsinline','');a.loop=true;a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';const p=a.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
+    }catch(e){err=String(e);}subs.forEach(f=>f());return ctx;}
+  ['pointerdown','touchend','keydown','click'].forEach(ev=>addEventListener(ev,ensure,{capture:true,passive:true}));
+  function load(url){if(bufs[url])return Promise.resolve(bufs[url]);if(pending[url])return pending[url];
+    pending[url]=fetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();})
+      .then(a=>new Promise((res,rej)=>{const c=ensure();if(!c)return rej(new Error('no audio'));const p=c.decodeAudioData(a,res,rej);if(p&&p.catch)p.catch(rej);}))
+      .then(b=>bufs[url]=b).catch(e=>{delete pending[url];err=String(e.message||e);subs.forEach(f=>f());throw e;});return pending[url];}
+  return {ensure,load,onChange:f=>subs.push(f),get ctx(){return ctx},get master(){return master},state:()=>ctx?ctx.state:'none',error:()=>err};})();
+let audio=null;function getAudio(){const c=AudioKit.ensure();audio=c;if(c&&!noise){noise=c.createBuffer(1,c.sampleRate*.05,c.sampleRate);const d=noise.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,3);}return c;}
+
 const SynthMusic={on:true,playing:false,timer:null,master:null,
   start(){if(this.playing)return;let ctx;try{ctx=getAudio();}catch(e){return;}this.playing=true;
-    const m=ctx.createGain();m.gain.value=0;m.connect(ctx.destination);this.master=m;
+    const m=ctx.createGain();m.gain.value=0;m.connect(AudioKit.master);this.master=m;
     const len=ctx.sampleRate*4.5,ir=ctx.createBuffer(2,len,ctx.sampleRate);for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.2);}
     const verb=ctx.createConvolver();verb.buffer=ir;const wet=ctx.createGain();wet.gain.value=.8;verb.connect(wet);wet.connect(m);
     // soft air: filtered noise that slowly breathes
@@ -854,9 +873,9 @@ const SynthMusic={on:true,playing:false,timer:null,master:null,
 // recorded ambient bed (music_bed.mp3, 96 s, seamless): looped with overlapping crossfades so mp3 padding never clicks
 const Music={on:true,playing:false,buf:null,gain:null,timer:null,synth:false,
   async start(){if(this.playing)return;let ctx;try{ctx=getAudio();}catch(e){return;}this.playing=true;
-    try{if(!this.buf){const r=await fetch('music_bed.mp3');if(!r.ok)throw 0;this.buf=await ctx.decodeAudioData(await r.arrayBuffer());}}
+    try{if(!this.buf)this.buf=await AudioKit.load('music_bed.mp3');}
     catch(e){this.synth=true;SynthMusic.start();return;}
-    if(!this.playing)return;const g=ctx.createGain();g.gain.value=0;g.connect(ctx.destination);this.gain=g;g.gain.linearRampToValueAtTime(.55,ctx.currentTime+3);
+    if(!this.playing)return;const g=ctx.createGain();g.gain.value=0;g.connect(AudioKit.master);this.gain=g;g.gain.linearRampToValueAtTime(.55,ctx.currentTime+3);
     const X=4,D=this.buf.duration-.1;
     const loop=at=>{if(!this.playing)return;const s=ctx.createBufferSource(),e=ctx.createGain();s.buffer=this.buf;s.connect(e);e.connect(g);
       e.gain.setValueAtTime(0,at);e.gain.linearRampToValueAtTime(1,at+X);e.gain.setValueAtTime(1,at+D-X);e.gain.linearRampToValueAtTime(0,at+D);
@@ -871,15 +890,28 @@ const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;
 let voiceOn=TTS||VO.size>0,speaking=false,zhVoice=null;
 function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/zh[-_]CN/i.test(v.lang)&&/Ting|Xiaoxiao|Yun|Google/i.test(v.name))||vs.find(v=>/zh[-_]CN/i.test(v.lang))||vs.find(v=>/^zh/i.test(v.lang))||null;}
 if(TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
-function say(text,id){if(!voiceOn||!text)return;
-  if(id&&VO.has(id)){hush();const a=new Audio('narration/'+id+'.mp3');clip=a;speaking=true;Music.duck(true);
-    a.onended=a.onerror=()=>{if(clip===a){clip=null;speaking=false;Music.duck(false);}};a.play().catch(()=>{if(clip===a){clip=null;speaking=false;Music.duck(false);}});return;}
-  if(!TTS)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text.replace(/[“”"]/g,''));u.lang='zh-CN';if(zhVoice)u.voice=zhVoice;u.rate=1.05;
-  u.onstart=()=>{speaking=true;Music.duck(true);};u.onend=u.onerror=()=>{speaking=false;Music.duck(false);};speaking=true;speechSynthesis.speak(u);}catch(e){speaking=false;}}
-function hush(){if(clip){try{clip.pause();}catch(e){}clip=null;}Music.duck(false);speaking=false;if(TTS)try{speechSynthesis.cancel();}catch(e){}}
+// narration: decoded clip through AudioKit → plain <audio> element → browser speech, whichever works first
+let voiceSrc=null,voiceGain=null,voiceTok=0;
+function hush(){voiceTok++;if(voiceSrc){try{voiceSrc.onended=null;voiceSrc.stop();}catch(e){}voiceSrc=null;}if(clip){try{clip.pause();}catch(e){}clip=null;}if(TTS)try{speechSynthesis.cancel();}catch(e){}speaking=false;Music.duck(false);}
+function sayTTS(text){if(!TTS)return;const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';if(zhVoice)u.voice=zhVoice;u.rate=1.05;u.onstart=()=>{speaking=true;Music.duck(true);};u.onend=u.onerror=()=>{speaking=false;Music.duck(false);};speaking=true;try{speechSynthesis.speak(u);}catch(e){speaking=false;}}
+function say(text,id){if(!voiceOn||!text)return;hush();const tok=voiceTok;speaking=true;Music.duck(true);const url='narration/'+id+'.mp3';
+  if(!VO.has(id)){sayTTS(text);return;}
+  AudioKit.load(url).then(buf=>{if(tok!==voiceTok)return;const c=AudioKit.ensure();if(!voiceGain){voiceGain=c.createGain();voiceGain.gain.value=1;voiceGain.connect(AudioKit.master);}
+      const s=c.createBufferSource();s.buffer=buf;s.connect(voiceGain);s.onended=()=>{if(voiceSrc===s){voiceSrc=null;speaking=false;Music.duck(false);}};voiceSrc=s;s.start();})
+    .catch(()=>{if(tok!==voiceTok)return;const a=new Audio(url);clip=a;const done=()=>{if(clip===a){clip=null;speaking=false;Music.duck(false);}};a.onended=done;
+      a.onerror=()=>{if(clip===a){clip=null;sayTTS(text);}};a.play().catch(()=>{if(clip===a){clip=null;sayTTS(text);}});});}
+function preloadVoice(){VO.forEach(id=>AudioKit.load('narration/'+id+'.mp3').catch(()=>{}));AudioKit.load('music_bed.mp3').catch(()=>{});}
+function pauseAll(v){const c=AudioKit.ctx;if(c){try{v?c.suspend():c.resume();}catch(e){}}if(clip)try{v?clip.pause():clip.play();}catch(e){}if(TTS)try{v?speechSynthesis.pause():speechSynthesis.resume();}catch(e){}}
+
+// tell the viewer when sound is blocked or a clip failed, instead of failing silently
+function soundStatus(el,idle){const s=AudioKit.state(),e=AudioKit.error();
+  if(s==='none'||s==='suspended'&&!(typeof demo!=='undefined'&&demo&&demo.paused)&&!(typeof tour!=='undefined'&&tour&&tour.paused)){el.textContent='声音未开启 · 点这里开启';el.classList.add('warn');}
+  else if(e){el.textContent='音频文件没加载上，已改用浏览器朗读';el.classList.add('warn');}else{el.textContent=idle;el.classList.remove('warn');}}
+setInterval(()=>{const el=$('dState');if(el&&!demoCard.hidden)soundStatus(el,'可随时拖动、缩放');},500);
+$('dState').addEventListener('click',()=>{getAudio();if(demo&&demo.paused)setPaused(false);});
 bSnd.addEventListener('click',()=>{try{getAudio();soundOn=!soundOn;bSnd.setAttribute('aria-pressed',String(soundOn));}catch(e){bSnd.disabled=true;}});
 function tick(hi){const t=audio.currentTime,src=audio.createBufferSource(),f=audio.createBiquadFilter(),g=audio.createGain();src.buffer=noise;f.type='bandpass';f.frequency.value=hi?4200:3100;f.Q.value=5;
-  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.5,t+.002);g.gain.exponentialRampToValueAtTime(.0001,t+.035);src.connect(f);f.connect(g);g.connect(audio.destination);src.start(t);src.stop(t+.05);}
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.5,t+.002);g.gain.exponentialRampToValueAtTime(.0001,t+.035);src.connect(f);f.connect(g);g.connect(AudioKit.master);src.start(t);src.stop(t+.05);}
 /* ================= configurator ================= */
 const CFG={
  metal:{rose:{n:'玫瑰金',c:0xdc9f80,a:0xe2a184,ink:'#b9805e',sw:'#d99c7e'},plat:{n:'铂金',c:0xcfd4da,a:0xe2e5e9,ink:'#8f959c',sw:'#c9ced4'},yellow:{n:'黄金',c:0xdcb25a,a:0xe6c272,ink:'#b38c3c',sw:'#d8b05c'}},
@@ -1015,7 +1047,7 @@ function demoEnter(i){const st=DEMO[i];
   if(!st.ex&&explodeTarget>0){explodeTarget=0;syncExplode();}
   if(demo.jumped&&!st.jump){mt=nowSec();demo.jumped=false;}if(st.jump)demo.jumped=true;
   demo.i=i;demo.t=0;st.go();$('demoStep').textContent=`${i+1} / ${DEMO.length}`;$('demoTitle').textContent=st.title;setDemoText(st.text,true,String(i+1).padStart(2,'0'));}
-function startDemo(){if(setting)endSet();if(Music.on)Music.start();camTween=null;$('more').open=false;$('custom').open=false;demo={i:0,t:0,paused:false};bP.textContent='暂停';bP.setAttribute('aria-pressed','false');drawer.hidden=true;demoCard.hidden=false;hideToast();demoEnter(0);resize();}
+function startDemo(){if(setting)endSet();getAudio();preloadVoice();if(Music.on)Music.start();camTween=null;$('more').open=false;$('custom').open=false;demo={i:0,t:0,paused:false};bP.textContent='暂停';bP.setAttribute('aria-pressed','false');drawer.hidden=true;demoCard.hidden=false;hideToast();demoEnter(0);resize();}
 function stopDemo(done){if(!demo)return;if(demo.cur&&demo.cur.leave)demo.cur.leave();demo=null;hush();Music.stop();demoCard.hidden=true;drawer.hidden=false;controls.autoRotate=false;resize();
   if(!done){setFocus(null);}syncExplode();}
 $('btnDemo').addEventListener('click',startDemo);
@@ -1023,8 +1055,7 @@ $('btnStop').addEventListener('click',()=>stopDemo(false));
 // during the tour the viewer can still orbit and zoom; the tour only takes the camera back at the next step
 const bP=$('btnPause');
 function setPaused(v){if(!demo)return;demo.paused=v;bP.textContent=v?'继续':'暂停';bP.setAttribute('aria-pressed',String(v));
-  if(clip)try{v?clip.pause():clip.play();}catch(e){}
-  if(TTS)try{v?speechSynthesis.pause():speechSynthesis.resume();}catch(e){}}
+  pauseAll(v);}
 bP.addEventListener('click',()=>setPaused(!demo.paused));
 $('btnNext').addEventListener('click',()=>{if(!demo)return;hush();setPaused(false);if(demo.i+1<DEMO.length)demoEnter(demo.i+1);else stopDemo(true);});
 $('btnPrev').addEventListener('click',()=>{if(!demo)return;hush();setPaused(false);demoEnter(Math.max(0,demo.i-1));});

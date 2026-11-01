@@ -87,6 +87,7 @@ h1 em{font-style:normal;color:var(--accent)}
 .t-step{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .t-text{margin:0;font-size:14px;line-height:1.65;min-height:4.9em;max-width:62ch}
 .t-ctl{display:flex;align-items:center;gap:6px}.t-ctl .btn{flex:none}.t-ctl #tPause{min-width:4.2em}
+.t-tip.warn{color:var(--accent);font-weight:600;cursor:pointer}
 .t-tip{flex:1;min-width:0;font-size:11.5px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn.tiny[aria-pressed="false"]{opacity:.5;text-decoration:line-through}#btnTraffic.tiny[aria-pressed="false"]{text-decoration:none}
 @media (max-width:420px){.t-tip{display:none}.t-ctl{justify-content:space-between}}
@@ -120,7 +121,7 @@ h1 em{font-style:normal;color:var(--accent)}
     <div class="bar"><i id="tBar"></i></div>
     <div class="t-ctl">
       <button class="btn tiny" id="tPrev" aria-label="上一段">‹</button><button class="btn tiny" id="tPause">暂停</button><button class="btn tiny" id="tNext" aria-label="下一段">›</button>
-      <span class="t-tip">讲解中也可以拖动画面</span>
+      <span class="t-tip" id="tState" role="button" tabindex="0">讲解中也可以拖动画面</span>
       <button class="btn tiny" id="tVoice" aria-pressed="true">配音</button><button class="btn tiny" id="tMusic" aria-pressed="true">音乐</button>
     </div>
   </div>
@@ -144,6 +145,7 @@ h1 em{font-style:normal;color:var(--accent)}
     <div class="row">
       <button class="btn primary" id="btnRestart">从进港开始看</button>
       <button class="btn" id="btnPlay" aria-pressed="false">暂停过站</button>
+      <button class="btn" id="btnSfx" aria-pressed="false">声音</button>
       <div class="seg spd" role="group" aria-label="速度"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="4" aria-pressed="false">4×</button></div>
     </div>
     <div class="chips" id="chips" role="group" aria-label="单独看某一层"></div>
@@ -906,24 +908,54 @@ addEventListener('resize',resize);
 controls.target.copy(VIEWS.aerial.tg);camera.position.set(0,380,70);camera.aspect=innerWidth/innerHeight;resize();camera.position.copy(VIEWS.aerial.pos());
 
 /* ================= audio: ambient bed + narration (MiniMax clips, browser voice as fallback) ================= */
-let audio=null;function getAudio(){if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();audio.resume();return audio;}
+/* ================= AudioKit: one audio context, unlocked by the first touch or click anywhere ================= */
+// Narration and music are decoded into buffers and played through this context, so later clips need no new
+// user gesture (mobile browsers block media started outside one), and iOS plays through the silent switch.
+const AudioKit=(()=>{let ctx=null,master=null,unlocked=false,err='';const bufs={},pending={},subs=[];
+  function ensure(){try{if(!ctx){const C=window.AudioContext||window.webkitAudioContext;if(!C){err='no-webaudio';return null;}ctx=new C();master=ctx.createGain();master.connect(ctx.destination);
+        try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}ctx.onstatechange=()=>subs.forEach(f=>f());}
+      if(ctx.state!=='running'){const p=ctx.resume();if(p&&p.catch)p.catch(()=>{});}
+      if(!unlocked){const b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();s.buffer=b;s.connect(master);s.start(0);unlocked=true;
+        // a silent media element switches iOS to the playback audio session, so the ringer switch does not mute us
+        try{const a=document.createElement('audio');a.setAttribute('playsinline','');a.loop=true;a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';const p=a.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}
+    }catch(e){err=String(e);}subs.forEach(f=>f());return ctx;}
+  ['pointerdown','touchend','keydown','click'].forEach(ev=>addEventListener(ev,ensure,{capture:true,passive:true}));
+  function load(url){if(bufs[url])return Promise.resolve(bufs[url]);if(pending[url])return pending[url];
+    pending[url]=fetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();})
+      .then(a=>new Promise((res,rej)=>{const c=ensure();if(!c)return rej(new Error('no audio'));const p=c.decodeAudioData(a,res,rej);if(p&&p.catch)p.catch(rej);}))
+      .then(b=>bufs[url]=b).catch(e=>{delete pending[url];err=String(e.message||e);subs.forEach(f=>f());throw e;});return pending[url];}
+  return {ensure,load,onChange:f=>subs.push(f),get ctx(){return ctx},get master(){return master},state:()=>ctx?ctx.state:'none',error:()=>err};})();
+let audio=null;function getAudio(){const c=AudioKit.ensure();audio=c;return c;}
+
 const Music={on:true,playing:false,buf:null,gain:null,timer:null,
   async start(){if(this.playing)return;let ctx;try{ctx=getAudio();}catch(e){return;}this.playing=true;
-    try{if(!this.buf){const r=await fetch('music_bed.mp3');if(!r.ok)throw 0;this.buf=await ctx.decodeAudioData(await r.arrayBuffer());}}catch(e){this.playing=false;return;}
-    if(!this.playing)return;const g=ctx.createGain();g.gain.value=0;g.connect(ctx.destination);this.gain=g;g.gain.linearRampToValueAtTime(.5,ctx.currentTime+3);
+    try{if(!this.buf)this.buf=await AudioKit.load('music_bed.mp3');}catch(e){this.playing=false;return;}
+    if(!this.playing)return;const g=ctx.createGain();g.gain.value=0;g.connect(AudioKit.master);this.gain=g;g.gain.linearRampToValueAtTime(.5,ctx.currentTime+3);
     const X=4,D=this.buf.duration-.1;const loop=at=>{if(!this.playing)return;const s=ctx.createBufferSource(),e=ctx.createGain();s.buffer=this.buf;s.connect(e);e.connect(g);
       e.gain.setValueAtTime(0,at);e.gain.linearRampToValueAtTime(1,at+X);e.gain.setValueAtTime(1,at+D-X);e.gain.linearRampToValueAtTime(0,at+D);s.start(at,.05);s.stop(at+D+.05);
       this.timer=setTimeout(()=>loop(at+D-X),(at+D-X-ctx.currentTime-1)*1000);};loop(ctx.currentTime+.05);},
   stop(){if(!this.playing)return;this.playing=false;clearTimeout(this.timer);const g=this.gain;if(!g)return;this.gain=null;try{g.gain.cancelScheduledValues(audio.currentTime);g.gain.setValueAtTime(g.gain.value,audio.currentTime);g.gain.linearRampToValueAtTime(0,audio.currentTime+2);setTimeout(()=>g.disconnect(),2300);}catch(e){}},
   duck(v){if(this.gain)this.gain.gain.setTargetAtTime(v?.2:.5,audio.currentTime,.35);}};
 const VO=new Set(['01','02','03','04','05','06','07','08','09','10']);const clipLen={'01':13.4,'02':12.6,'03':10.2,'04':10.9,'05':8.3,'06':7.7,'07':8.1,'08':7.8,'09':8.4,'10':10.2};
-VO.forEach(id=>{const a=new Audio();a.preload='metadata';a.src='narration/'+id+'.mp3';a.addEventListener('loadedmetadata',()=>{clipLen[id]=a.duration;});});
 const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;let voiceOn=TTS||VO.size>0,speaking=false,clip=null,zhVoice=null;
 function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/zh[-_]CN/i.test(v.lang))||vs.find(v=>/^zh/i.test(v.lang))||null;}if(TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
-function hush(){if(clip){try{clip.pause();}catch(e){}clip=null;}if(TTS)try{speechSynthesis.cancel();}catch(e){}speaking=false;Music.duck(false);}
-function say(text,id){if(!voiceOn||!text)return;hush();
-  if(VO.has(id)){const a=new Audio('narration/'+id+'.mp3');clip=a;speaking=true;Music.duck(true);const done=()=>{if(clip===a){clip=null;speaking=false;Music.duck(false);}};a.onended=a.onerror=done;a.play().catch(done);return;}
-  if(!TTS)return;const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';if(zhVoice)u.voice=zhVoice;u.rate=1.05;u.onstart=()=>{speaking=true;Music.duck(true);};u.onend=u.onerror=()=>{speaking=false;Music.duck(false);};speaking=true;try{speechSynthesis.speak(u);}catch(e){speaking=false;}}
+// narration: decoded clip through AudioKit → plain <audio> element → browser speech, whichever works first
+let voiceSrc=null,voiceGain=null,voiceTok=0;
+function hush(){voiceTok++;if(voiceSrc){try{voiceSrc.onended=null;voiceSrc.stop();}catch(e){}voiceSrc=null;}if(clip){try{clip.pause();}catch(e){}clip=null;}if(TTS)try{speechSynthesis.cancel();}catch(e){}speaking=false;Music.duck(false);}
+function sayTTS(text){if(!TTS)return;const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';if(zhVoice)u.voice=zhVoice;u.rate=1.05;u.onstart=()=>{speaking=true;Music.duck(true);};u.onend=u.onerror=()=>{speaking=false;Music.duck(false);};speaking=true;try{speechSynthesis.speak(u);}catch(e){speaking=false;}}
+function say(text,id){if(!voiceOn||!text)return;hush();const tok=voiceTok;speaking=true;Music.duck(true);const url='narration/'+id+'.mp3';
+  if(!VO.has(id)){sayTTS(text);return;}
+  AudioKit.load(url).then(buf=>{if(tok!==voiceTok)return;const c=AudioKit.ensure();if(!voiceGain){voiceGain=c.createGain();voiceGain.gain.value=1;voiceGain.connect(AudioKit.master);}
+      const s=c.createBufferSource();s.buffer=buf;s.connect(voiceGain);s.onended=()=>{if(voiceSrc===s){voiceSrc=null;speaking=false;Music.duck(false);}};voiceSrc=s;s.start();})
+    .catch(()=>{if(tok!==voiceTok)return;const a=new Audio(url);clip=a;const done=()=>{if(clip===a){clip=null;speaking=false;Music.duck(false);}};a.onended=done;
+      a.onerror=()=>{if(clip===a){clip=null;sayTTS(text);}};a.play().catch(()=>{if(clip===a){clip=null;sayTTS(text);}});});}
+function preloadVoice(){VO.forEach(id=>AudioKit.load('narration/'+id+'.mp3').catch(()=>{}));AudioKit.load('music_bed.mp3').catch(()=>{});}
+function pauseAll(v){const c=AudioKit.ctx;if(c){try{v?c.suspend():c.resume();}catch(e){}}if(clip)try{v?clip.pause():clip.play();}catch(e){}if(TTS)try{v?speechSynthesis.pause():speechSynthesis.resume();}catch(e){}}
+
+function soundStatus(el,idle){const s=AudioKit.state(),e=AudioKit.error();
+  if(s==='none'||s==='suspended'&&!(tour&&tour.paused)){el.textContent='声音未开启 · 点这里开启';el.classList.add('warn');}
+  else if(e){el.textContent='音频文件没加载上，已改用浏览器朗读';el.classList.add('warn');}else{el.textContent=idle;el.classList.remove('warn');}}
+
 
 /* ================= cinematic tour: each shot drives the turnaround clock, the camera and the narration ================= */
 const NARR={'01':'这是照着一张机坪航拍照片，用代码一比一重建的停机位。三架客机、四座登机桥、七十多台地勤车辆，连地面标线和影子的方向，都对着原图摆放。',
@@ -950,17 +982,17 @@ const SHOTS=[
  {id:'08',title:'撤桥 · 推出',ta:[35.3,41],d:10,cam:dolly(()=>SL(-26,-24).setY(15),()=>SL(-30,14).setY(14),()=>PP().setY(2),()=>PP().setY(2))},
  {id:'09',title:'离港',ta:[41,44.6],d:9,cam:dolly(()=>SL(6,60).setY(10),()=>SL(-34,58).setY(12),()=>PP().setY(2),()=>PP().setY(2))},
  {id:'10',title:'夜色中的机坪',ta:[14,16],d:11,tod:'night',cam:orbit(new V(0,0,0),120,72,40,100)}];
-let tour=null;const tourCard=$('tourCard'),drawerEl=document.querySelector('#drawer');
+let tour=null,tour_sfx=false;const tourCard=$('tourCard'),drawerEl=document.querySelector('#drawer');
 function shotDur(st){const a=clipLen[st.id],b=TTS&&voiceOn&&!VO.has(st.id)?NARR[st.id].length*.24+1:0;return Math.max(st.d,(a||0)+1.2,b);}
 function setTod(v){tod=v;document.querySelectorAll('[data-tod]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.tod===v)));}
 function shotEnter(i){const st=SHOTS[i];tour.i=i;tour.t=0;tour.user=false;tour.D=shotDur(st);tour.from=[camera.position.clone(),controls.target.clone(),camera.fov];tour.fov=st.fov||38;
   if(explodeT>0){explodeT=0;syncEx();}setFocus(null);setTod(st.tod||'day');TA.t=st.ta[0];TA.play=true;TA.speed=(st.ta[1]-st.ta[0])/(tour.D*.8);
   camTween=null;curView='tour';document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));
   $('tStep').textContent=`${i+1} / ${SHOTS.length}`;$('tTitle').textContent=st.title;$('tText').textContent=NARR[st.id];say(NARR[st.id],st.id);}
-function tourStart(){if(Music.on)Music.start();tour={i:0,t:0,paused:false};drawerEl.hidden=true;tourCard.hidden=false;$('tPause').textContent='暂停';shotEnter(0);resize();}
-function tourStop(){if(!tour)return;tour=null;hush();Music.stop();tourCard.hidden=true;drawerEl.hidden=false;TA.speed=1;TA.play=true;setTod('day');camera.fov=36;camera.updateProjectionMatrix();
+function tourStart(){getAudio();preloadVoice();if(Music.on)Music.start();tour_sfx=Sfx.on;if(!Sfx.on)setSfx(true);tour={i:0,t:0,paused:false};drawerEl.hidden=true;tourCard.hidden=false;$('tPause').textContent='暂停';shotEnter(0);resize();}
+function tourStop(){if(!tour)return;tour=null;hush();Music.stop();if(!tour_sfx)setSfx(false);tourCard.hidden=true;drawerEl.hidden=false;TA.speed=1;TA.play=true;setTod('day');camera.fov=36;camera.updateProjectionMatrix();
   document.querySelectorAll('[data-speed]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.speed==='1')));syncPlay();resize();goView('free');}
-function tourPause(v){tour.paused=v;TA.play=!v;$('tPause').textContent=v?'继续':'暂停';if(clip)try{v?clip.pause():clip.play();}catch(e){}if(TTS)try{v?speechSynthesis.pause():speechSynthesis.resume();}catch(e){}}
+function tourPause(v){tour.paused=v;TA.play=!v;$('tPause').textContent=v?'继续':'暂停';pauseAll(v);}
 $('btnTour').addEventListener('click',tourStart);$('tExit').addEventListener('click',tourStop);
 $('tPause').addEventListener('click',()=>tourPause(!tour.paused));
 $('tNext').addEventListener('click',()=>{if(!tour)return;hush();tourPause(false);tour.i+1<SHOTS.length?shotEnter(tour.i+1):tourStop();});
@@ -976,6 +1008,33 @@ function tourTick(dt){if(!tour)return;if(!tour.paused)tour.t+=dt;const st=SHOTS[
   $('tBar').style.width=((tour.i+u)/SHOTS.length*100).toFixed(1)+'%';
   if(tour.t>=tour.D&&(!speaking||tour.t>tour.D+6)){tour.i+1<SHOTS.length?shotEnter(tour.i+1):tourStop();}}
 
+/* ================= apron sound effects: distant airport rumble, the middle jet's engines, the pushback tug's reverse beeper ================= */
+const _sp=new V();
+const Sfx={on:false,n:null,
+  start(){const c=AudioKit.ensure();if(!c||this.n)return;const out=c.createGain();out.gain.value=0;out.connect(AudioKit.master);out.gain.setTargetAtTime(1,c.currentTime,.6);
+    const noiseBuf=(sec,brown)=>{const b=c.createBuffer(1,c.sampleRate*sec,c.sampleRate),d=b.getChannelData(0);let v=0;for(let i=0;i<d.length;i++){const w=Math.random()*2-1;if(brown){v=(v+.02*w)/1.02;d[i]=v*3.5;}else d[i]=w;}return b;};
+    const loop=(buf)=>{const s=c.createBufferSource();s.buffer=buf;s.loop=true;s.start();return s;};
+    const chain=(src,...nodes)=>{nodes.reduce((a,b)=>{a.connect(b);return b;},src).connect(out);};
+    const filt=(type,f,q)=>{const x=c.createBiquadFilter();x.type=type;x.frequency.value=f;if(q)x.Q.value=q;return x;};
+    const gain=v=>{const g=c.createGain();g.gain.value=v;return g;};
+    const bed=loop(noiseBuf(4,true)),bedG=gain(.1);chain(bed,filt('lowpass',360),bedG);
+    const air=loop(noiseBuf(2,false)),airF=filt('bandpass',900,.7),airG=gain(0);chain(air,airF,airG);
+    const whine=c.createOscillator();whine.type='sine';whine.frequency.value=1200;whine.start();const whG=gain(0);chain(whine,whG);
+    const rum=c.createOscillator();rum.type='sawtooth';rum.frequency.value=45;rum.start();const rumG=gain(0);chain(rum,filt('lowpass',180),rumG);
+    const beep=c.createOscillator();beep.type='square';beep.frequency.value=1050;beep.start();const bpG=gain(0);chain(beep,filt('lowpass',2400),bpG);
+    this.n={out,srcs:[bed,air,whine,rum,beep],airF,airG,whine,whG,rum,rumG,bpG};},
+  stop(){const n=this.n;if(!n)return;this.n=null;const c=AudioKit.ctx;n.out.gain.setTargetAtTime(0,c.currentTime,.25);setTimeout(()=>{n.srcs.forEach(s=>{try{s.stop();}catch(e){}});n.out.disconnect();},1600);},
+  update(){const n=this.n;if(!n)return;const c=AudioKit.ctx,t=c.currentTime;P2.g.getWorldPosition(_sp);
+    const att=P2.g.visible?clamp(28/(camera.position.distanceTo(_sp)+8),0,1):0,rpm=P2.rpm||0;
+    n.airG.gain.setTargetAtTime(rpm*att*.45,t,.2);n.airF.frequency.setTargetAtTime(500+1100*rpm,t,.4);
+    n.whine.frequency.setTargetAtTime(700+2600*rpm,t,.5);n.whG.gain.setTargetAtTime(rpm*att*.03,t,.2);
+    n.rum.frequency.setTargetAtTime(35+55*rpm,t,.5);n.rumG.gain.setTargetAtTime(rpm*att*.16,t,.2);
+    const pushing=TA.t>37.5&&TA.t<41&&TA.play&&pushTug.visible,on=pushing&&(performance.now()/900%1)<.33;
+    n.bpG.gain.setTargetAtTime(on?.05*clamp(22/(camera.position.distanceTo(pushTug.position)+6),0,1):0,t,.008);}};
+const bSfx=$('btnSfx');function setSfx(v){Sfx.on=v;bSfx.setAttribute('aria-pressed',String(v));v?Sfx.start():Sfx.stop();}
+bSfx.addEventListener('click',()=>{getAudio();setSfx(!Sfx.on);});
+setInterval(()=>{const el=$('tState');if(el&&!tourCard.hidden)soundStatus(el,'讲解中也可以拖动画面');},500);
+$('tState').addEventListener('click',()=>{getAudio();if(tour&&tour.paused)tourPause(false);});
 /* ================= loop ================= */
 const clock=new THREE.Clock();const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
 function loop(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
@@ -990,7 +1049,7 @@ function loop(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
   planes.forEach((p,i)=>{const live=i===1&&(TA.t<4.2||TA.t>36.8);   // parked jets on the bridge keep the beacon off
   const on=live&&((t+i*.37)%1.1)<.12;p.beacon.material.color.setHex(on?0xff3030:0x5a0d0d);p.beacon.scale.setScalar(on?1.6:1);});
   trainStep(traffic&&!reduceMotion?dt:0);
-  tourTick(dt);const tt=taUpdate(dt);rollUpdate();paxUpdate(tt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
+  tourTick(dt);const tt=taUpdate(dt);Sfx.update();rollUpdate();paxUpdate(tt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
   planes.forEach(p=>{if(p.fans){p.ang=(p.ang||0)+dt*30*(p.rpm||0);p.fans.forEach(f=>f.rotation.z=p.ang);}});
   applyTod(dt);
   controls.update();{const cd=camera.position.distanceTo(controls.target),nr=clamp(cd*.012,.05,4),fr=cd*14+900;if(Math.abs(camera.near-nr)>nr*.05||Math.abs(camera.far-fr)>fr*.05){camera.near=nr;camera.far=fr;camera.updateProjectionMatrix();}sky.scale.setScalar(camera.far*.85/2400);sky.position.copy(camera.position);}
