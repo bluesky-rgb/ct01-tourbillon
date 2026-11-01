@@ -614,7 +614,7 @@ veh(922,258,20,30,0,0x80868c,'gpu','地面空调车');veh(832,207,24,20,0,0x6b70
 for(let i=0;i<4;i++)veh(938+i*11,494-i*17,16,14,-55,0xf0f0ec,'cart','行李拖车');
 veh(976,424,18,14,-55,0x2c2f33,'tug','行李牵引车');
 // stand 3 (right)
-veh(1105,330,40,20,-20,0xd8c9a6,'catering','配餐车');veh(1176,560,42,14,8,0xf0be1a,'loader','行李传送带车');veh(1160,440,12,16,0,0xeeeeec,'cart','行李拖车');
+veh(1105,330,40,20,-20,0xd8c9a6,'catering','配餐车');veh(1160,440,12,16,0,0xeeeeec,'cart','行李拖车');
 [[1158,154,0x2d5fa8],[1195,150,0xf2f2ef],[1215,154,0x3f8a5a],[1236,154,0xf2f2ef]].forEach(([a,b,c])=>veh(a,b,14,30,0,c,'car','员工车辆'));
 // bottom row
 [312,340,367,404,432].forEach(a=>veh(a,719,22,20,0,0xe57722,'cart','行李拖车 · 防雨罩'));
@@ -638,7 +638,7 @@ function person(px,pz,vest,name,parent){const g=new THREE.Group();g.position.set
   const arms=[-1,1].map(s=>{const a=new THREE.Group();a.position.set(s*.24,1.16,0);g.add(a);const m=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.52,6),V_);m.position.y=-.26;m.castShadow=true;m.userData={layer:2,name};a.add(m);return a;});
   ao(g,.9,.9,2,.35);g.userData.arms=arms;people.push(g);return g;}
 // static crews on stands 1 and 3
-[[318,372,0xf6a21c],[176,428,0xf6a21c],[300,330,0xd8f23b],[1152,456,0xf6a21c],[1190,575,0xd8f23b],[1092,350,0xf6a21c],[955,420,0xd8f23b],[870,330,0xf6a21c]].forEach(([a,b,c])=>{const p=W(a,b);person(p.x,p.z,c,'地勤人员');});
+[[318,372,0xf6a21c],[176,428,0xf6a21c],[300,330,0xd8f23b],[1152,456,0xf6a21c],[1092,350,0xf6a21c],[955,420,0xd8f23b],[870,330,0xf6a21c]].forEach(([a,b,c])=>{const p=W(a,b);person(p.x,p.z,c,'地勤人员');});
 
 /* ================= turnaround of the middle stand ================= */
 const P2=planes[1],B2=bridges[1],HOME=P2.home.p.clone();
@@ -795,6 +795,27 @@ function paxUpdate(t){const deb=t>6&&t<13,brd=t>21&&t<35;paxM.visible=deb||brd;i
   paxM.instanceMatrix.needsUpdate=true;}
 
 planes[0].setDoor('L1',1);planes[2].setDoor('L1',1);
+/* ================= neighbouring stands: baggage loading at the aft hold, looping ================= */
+const SIDE=[],sideAnim=[];
+[[planes[0],0x4a4e54,0xe57722],[planes[2],0x8b5a2b,0xe6e6e2]].forEach(([p,lc,cc],si)=>{p.setDoor('CA',1);
+  const Y=new V(0,1,0),r=p.r,caZ=-p.L/2+(p.T.bogie?.62:.69)*p.L,LW=(x,z)=>new V(x,0,z).applyAxisAngle(Y,p.home.r).add(new V(p.home.p.x,0,p.home.p.z));
+  const ld=veh(0,0,16,46,0,lc,'loader','行李传送带车 · 装货中');ld.position.copy(LW(r+3.02,caZ+.04));ld.rotation.y=p.home.r+PI/2;ld.userData.belt.rotation.x=-.32;
+  const bags=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,.32,.7),M(2,'bags'),6);bags.userData={layer:2,name:'托运行李'};bags.castShadow=true;ld.userData.belt.add(bags);
+  const tug=veh(0,0,14,22,0,0x2c2f33,'tug','行李牵引车');tug.position.copy(LW(r+6.3,caZ+3.4));tug.rotation.y=p.home.r;
+  const carts=[0,1].map(i=>{const c=veh(0,0,16,20,0,cc,'cart','行李拖车');c.position.copy(LW(r+6.3,caZ+6.3+i*2.85));c.rotation.y=p.home.r;return c;});
+  const pick=person(0,0,0xf6a21c,'装卸员 · 往传送带上放行李'),walk=person(0,0,0xd8f23b,'装卸员 · 从拖车取行李');
+  const A=LW(r+5.75,caZ+1.25),B=LW(r+4.75,caZ+1.6),C=LW(r+4.75,caZ+7.4),F=LW(r+2,caZ),D=LW(r+6.3,caZ+7.4);
+  SIDE.push({p,ld,bags,pick,walk,A,B,C,D,F,ph:si*3.7});sideAnim.push(ld,pick,walk);});
+function sideUpdate(){const now=performance.now()/1000,m4=new THREE.Matrix4(),q=new THREE.Quaternion();
+  for(const S of SIDE){const T=now+S.ph;
+    // bags ride up the belt into the hold, spaced out; the hold swallows them at the top
+    for(let i=0;i<6;i++){const f=((T*.32+i/6)%1+1)%1,on=i%3!==2;m4.compose(new V(0,.3,lerp(-2.1,2.1,f)),q,new V(on?1:0,on?1:0,on?1:0));S.bags.setMatrixAt(i,m4);}S.bags.instanceMatrix.needsUpdate=true;
+    // loader at the belt foot: lifts a bag every ~1.5 s
+    S.pick.position.copy(S.A);S.pick.rotation.y=Math.atan2(S.F.x-S.A.x,S.F.z-S.A.z);const lift=Math.max(0,Math.sin(T*4.2));S.pick.userData.arms.forEach(a=>{a.rotation.x=-.4-1.1*lift;a.rotation.z=0;});
+    // second loader walks between the carts and the belt: 9 s loop, pausing at each end
+    const u=(T%9)/9,k=u<.35?0:u<.5?sst(.35,.5,u):u<.85?1:1-sst(.85,1,u),w=S.walk;w.position.lerpVectors(S.C,S.B,k);
+    const moving=(u>.35&&u<.5)||u>.85,to=u<.5?S.B:S.C,fr=u<.5?S.C:S.B;w.rotation.y=moving?Math.atan2(to.x-fr.x,to.z-fr.z):(u<.35?Math.atan2(S.D.x-S.C.x,S.D.z-S.C.z):Math.atan2(S.F.x-S.B.x,S.F.z-S.B.z));
+    const sw=moving?Math.sin(now*7.2)*.5:0;w.position.y=moving?Math.abs(sw)*.06:0;w.userData.arms.forEach((a,j)=>{a.rotation.x=moving?(j?sw:-sw):-.9;a.rotation.z=0;});}}
 /* ================= turnaround panel ================= */
 const gWrap=$('gantt'),gRows=$('gRows');
 gRows.innerHTML=ROWS.map(r=>`<div class="g-row" data-k="${r.k}"><span>${r.n}</span><div class="g-track"><i style="left:${r.a/CYCLE*100}%;width:${(r.b-r.a)/CYCLE*100}%"></i></div></div>`).join('')+'<div class="g-head" id="gHead"></div>';
@@ -835,7 +856,7 @@ function trainStep(dt){const x=train.position.x,front=x+TRAIN_FRONT,rear=x+TRAIN
   if(!block){train.position.x+=dt*5.5;if(train.position.x>82)train.position.x=-82;}}
 
 /* ================= bake static models: merge each group's parts per material (fewer draw calls) ================= */
-const animated=new Set([...svc.map(x=>x.g),...bagCarts,train,pushTug,...chocks,marshal,...crew,P2.g]);
+const animated=new Set([...sideAnim,...svc.map(x=>x.g),...bagCarts,train,pushTug,...chocks,marshal,...crew,P2.g]);
 function bake(g){if(!THREE.BufferGeometryUtils)return;g.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(g.matrixWorld).invert(),buckets=new Map();let name=null,layer=null;
   g.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||Array.isArray(o.material)||o.material.isMeshBasicMaterial)return;name=name||o.userData.name;layer=o.userData.layer;
     const geo=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();for(const k of Object.keys(geo.attributes))if(!['position','normal','uv'].includes(k))geo.deleteAttribute(k);
@@ -936,7 +957,7 @@ const Music={on:true,playing:false,buf:null,gain:null,timer:null,
       this.timer=setTimeout(()=>loop(at+D-X),(at+D-X-ctx.currentTime-1)*1000);};loop(ctx.currentTime+.05);},
   stop(){if(!this.playing)return;this.playing=false;clearTimeout(this.timer);const g=this.gain;if(!g)return;this.gain=null;try{g.gain.cancelScheduledValues(audio.currentTime);g.gain.setValueAtTime(g.gain.value,audio.currentTime);g.gain.linearRampToValueAtTime(0,audio.currentTime+2);setTimeout(()=>g.disconnect(),2300);}catch(e){}},
   duck(v){if(this.gain)this.gain.gain.setTargetAtTime(v?.2:.5,audio.currentTime,.35);}};
-const VO=new Set(['01','02','03','04','05','06','07','08','09','10']);const clipLen={'01':13.4,'02':12.6,'03':10.2,'04':13.5,'05':8.3,'06':7.7,'07':8.1,'08':7.8,'09':8.4,'10':10.2};
+const VO=new Set(['01','02','03','04','05','06','07','08','09','10']);const clipLen={'01':13.4,'02':12.6,'03':10.2,'04':16.7,'05':8.3,'06':7.7,'07':8.1,'08':7.8,'09':8.4,'10':10.2};
 const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;let voiceOn=TTS||VO.size>0,speaking=false,clip=null,zhVoice=null;
 function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/zh[-_]CN/i.test(v.lang))||vs.find(v=>/^zh/i.test(v.lang))||null;}if(TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
 // narration: decoded clip through AudioKit → plain <audio> element → browser speech, whichever works first
@@ -1049,7 +1070,7 @@ function loop(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
   planes.forEach((p,i)=>{const live=i===1&&(TA.t<4.2||TA.t>36.8);   // parked jets on the bridge keep the beacon off
   const on=live&&((t+i*.37)%1.1)<.12;p.beacon.material.color.setHex(on?0xff3030:0x5a0d0d);p.beacon.scale.setScalar(on?1.6:1);});
   trainStep(traffic&&!reduceMotion?dt:0);
-  tourTick(dt);const tt=taUpdate(dt);Sfx.update();rollUpdate();paxUpdate(tt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
+  tourTick(dt);const tt=taUpdate(dt);Sfx.update();rollUpdate();sideUpdate();paxUpdate(tt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
   planes.forEach(p=>{if(p.fans){p.ang=(p.ang||0)+dt*30*(p.rpm||0);p.fans.forEach(f=>f.rotation.z=p.ang);}});
   applyTod(dt);
   controls.update();{const cd=camera.position.distanceTo(controls.target),nr=clamp(cd*.012,.05,4),fr=cd*14+900;if(Math.abs(camera.near-nr)>nr*.05||Math.abs(camera.far-fr)>fr*.05){camera.near=nr;camera.far=fr;camera.updateProjectionMatrix();}sky.scale.setScalar(camera.far*.85/2400);sky.position.copy(camera.position);}
