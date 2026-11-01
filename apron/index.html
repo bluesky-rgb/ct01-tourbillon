@@ -328,7 +328,10 @@ function makePlane(o){const g=new THREE.Group(),T=o.type==='757'?{belly:1.85,c0:
   const pts=[];for(let i=0;i<=64;i++){const f=i/64;pts.push(new THREE.Vector2(Math.max(.02,rf(f)*r),-L/2+f*L));}
   const fg=new THREE.LatheGeometry(pts,40);fg.rotateX(PI/2);
   {const P=fg.attributes.position;for(let i=0;i<P.count;i++){const f=(P.getZ(i)+L/2)/L;P.setY(i,P.getY(i)+off(f));}fg.computeVertexNormals();}
-  const fus=mesh(fg,3,ld+'f',{map:lt,roughness:.32,metalness:.05},`${o.name} · 机身`,g);fus.position.y=cy;
+  const em=(()=>{const Wc=512,Hc=1024,c=cvs(Wc,Hc),x=c.getContext('2d'),F=f=>(1-f)*Hc;x.fillStyle='#000';x.fillRect(0,0,Wc,Hc);x.fillStyle='#ffd9a0';
+    for(const u of [.31,.69])for(let f=.13;f<.79;f+=.0105){if(T.doors.some(d=>Math.abs(f-d)<.016)||Math.abs(f-.44)<.012)continue;x.fillRect(u*Wc-3,F(f)-3,6,5);}
+    x.fillStyle='#9fd0ff';x.fillRect(Wc*.32,F(.058),Wc*.36,F(.03)-F(.058));return tex(c);})();
+  const fus=mesh(fg,3,ld+'f',{map:lt,roughness:.32,metalness:.05,emissive:0xffffff,emissiveMap:em,emissiveIntensity:0},`${o.name} · 机身`,g);fus.position.y=cy;o.fusMat=fus.material;
   // wings (low wing, 5° dihedral)
   const z0=T.z0*L,c0=T.c0*L,sw=Math.tan(T.sweep*D2R),ct=.06*L*(T.c0/.21),hs=S/2,wy=cy-r*.62;
   const xk=hs*.36,ck=c0*.92-xk*sw;
@@ -389,7 +392,7 @@ function makePlane(o){const g=new THREE.Group(),T=o.type==='757'?{belly:1.85,c0:
   const SILL=-r*.45,DH=1.42,DW=.82;
   T.doors.forEach((f,i)=>{for(const s of [-1,1]){const tag=(s<0?'L':'R')+(i+1);const p=panel(f,s,SILL,SILL+DH,DW,'pdoor',`${s<0?'左':'右'}侧 ${i+1} 号舱门`);
     const grp=new THREE.Group();g.add(grp);grp.add(p.m);o.doorsAt[tag]={g:grp,kind:'plug',s,w:DW};}});
-  [[.3,'前货舱门'],[T.bogie?.66:.72,'后货舱门']].forEach(([f,nm],i)=>{const s=1,yb=-r*.64,yt=-r*.1,p=panel(f,s,yb,yt,1.3,'cdoor',nm);
+  [[.3,'前货舱门'],[T.bogie?.62:.69,'后货舱门']].forEach(([f,nm],i)=>{const s=1,yb=-r*.64,yt=-r*.1,p=panel(f,s,yb,yt,1.3,'cdoor',nm);
     const hx=Math.sqrt(Math.max(0,p.Rf*p.Rf-(yt-p.oy)*(yt-p.oy))),piv=new THREE.Group();piv.position.set(hx,cy+yt,p.zc);g.add(piv);
     p.m.position.set(-hx,-yt+p.oy,0);piv.add(p.m);o.doorsAt[i?'CA':'CF']={g:piv,kind:'cargo',s};});
   o.setDoor=(tag,k)=>{const d=o.doorsAt[tag];if(!d)return;if(d.kind==='plug'){const k1=clamp(k*2,0,1),k2=clamp(k*2-1,0,1);d.g.position.set(d.s*.24*k1,0,-(d.w+.04)*k2);}else d.g.rotation.z=d.s*1.95*k;};
@@ -613,7 +616,7 @@ veh(1105,330,40,20,-20,0xd8c9a6,'catering','配餐车');veh(1176,560,42,14,8,0xf
 [[1158,154,0x2d5fa8],[1195,150,0xf2f2ef],[1215,154,0x3f8a5a],[1236,154,0xf2f2ef]].forEach(([a,b,c])=>veh(a,b,14,30,0,c,'car','员工车辆'));
 // bottom row
 [312,340,367,404,432].forEach(a=>veh(a,719,22,20,0,0xe57722,'cart','行李拖车 · 防雨罩'));
-veh(928,716,24,50,90,0x2d3035,'tug','飞机牵引车');
+veh(400,640,24,50,90,0x2d3035,'tug','飞机牵引车');
 [1196,1236,1266,1296,1326].forEach(a=>veh(a,760,20,16,0,0xe6e6e2,'cart','行李拖车'));
 // cones at wingtips and engines
 [[90,505],[396,500],[200,395],[305,395],[560,488],[820,488],[1010,512],[1268,508],[1080,420],[1170,420]].forEach(([a,b])=>veh(a,b,4,4,0,0xf06a1c,'cone','安全锥'));
@@ -677,12 +680,12 @@ const gpu=veh(0,0,16,30,0,0xf0b91d,'gpu','地面电源车 · 400 Hz 供电');
 const sGpu=service(gpu,[[6,-44],[6.5,-31],[5,-20],[3.2,-11.5]],[3.6,5.2,38,40.5]);
 // belt loader to the aft cargo hold (right side) + baggage train
 const loader=veh(0,0,16,46,0,0x8b5a2b,'loader','行李传送带车');
-const sLoad=service(loader,[[40,30],[16,26],[6.6,13],[3.5,5.8]],[6.2,8,32.2,34.2]);
+const sLoad=service(loader,[[40,18],[18,7.4],[8.5,4.8],[4.55,4.9]],[6.2,8,32.2,34.2]);
 const bagTug=veh(0,0,14,22,0,0x2c2f33,'tug','行李牵引车');const bagCarts=[0,1,2].map(()=>veh(0,0,16,20,0,0xe57722,'cart','行李拖车 · 防雨罩'));
-const sBag=service(bagTug,[[46,40],[24,34],[9,22],[6.5,13.5]],[7.2,9.5,29.5,32],{train:bagCarts,out:[[6.5,13.5],[5.6,10],[7.6,7.4],[14,8],[30,16],[54,40]]});
+const sBag=service(bagTug,[[46,40],[34,36],[20,24],[12.5,12.4]],[7.2,9.5,29.5,32.6],{train:bagCarts,out:[[12.5,12.4],[10.6,9.0],[14.2,6.4],[20,8.4],[32,14],[80,22]]});
 // catering truck to the left aft door, box lifts on scissors
 const cat=veh(0,0,30,64,0,0xf1f1ee,'catering','配餐车 · 剪式升降');
-const sCat=service(cat,[[-8,44],[-12,24],[-12.5,10.6],[-9,8],[-5.8,7.7]],[8.6,10.4,24.6,26.6]);
+const sCat=service(cat,[[6,46],[8.4,26],[8.6,14],[8.2,9.8],[5.8,8.6]],[8.6,10.4,24.6,26.6]);
 // fuel truck under the right wing
 const fuel=veh(0,0,26,80,0,0xe6e6e2,'fuel','加油车 · 航空煤油');
 const sFuel=service(fuel,[[9,-46],[9,-30],[9.6,-16],[10.2,-5.6]],[11.2,12.8,25.8,27.8]);
@@ -704,8 +707,8 @@ const chocks=[[0,-11.4],[-1.4,.6],[1.4,.6],[-14.2,-.2],[14.2,-.2],[0,13.9]].map(
 const bagG=new THREE.InstancedMesh(new THREE.BoxGeometry(.5,.32,.7),M(2,'bags',{color:0x5b4a3c,roughness:.8}),6);bagG.userData={layer:2,name:'托运行李'};bagG.castShadow=true;loader.userData.belt.add(bagG);
 // ground crew who follow the turnaround
 const marshal=person(0,0,0xf6a21c,'引导员 · 举指挥棒');const mw=[-1,1].map(s=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.7,6),new THREE.MeshBasicMaterial({color:0xff6a1a}));w.position.y=-.6;marshal.userData.arms[s<0?0:1].add(w);return w;});
-const CREW=[[1.9,-12.6],[-1.2,-12],[5.6,4.2],[5.2,8],[-2.4,3.6],[6.5,3.5],[-3.8,-17.6]];
-const CREWIN=[[1.9,-24],[-1.2,-21],[16,4.2],[16,8],[-16,3.6],[16,3.5],[-12,-17.6]];const crew=CREW.map(([x,z],i)=>person(0,0,i%2?0xd8f23b:0xf6a21c,'机务人员'));
+const CREW=[[1.9,-12.6],[-1.2,-12],[6.8,2.2],[2.4,11.2],[-2.4,3.6],[8.8,.6],[-3.8,-17.6]];
+const CREWIN=[[1.9,-24],[-1.2,-21],[16,1.2],[2.4,24],[-16,3.6],[16,1.2],[-12,-17.6]];const crew=CREW.map(([x,z],i)=>person(0,0,i%2?0xd8f23b:0xf6a21c,'机务人员'));
 const crewSch=[[3.2,38],[3.4,33],[8,31],[9.5,31],[10.4,25],[12.8,26],[36,41]];
 
 // visual docking guidance board on the pier facade
@@ -740,7 +743,7 @@ function taUpdate(dt){if(TA.play)TA.t=(TA.t+dt*.8*TA.speed)%CYCLE;const t=TA.t;
   else if(t>=41.2&&t<43.2){pushTug.visible=true;const k=sst(41.2,43.2,t),nose=new V(COUPLE,0,0).add(ho.p).add(new V(6,0,PUSH));
     pushTug.position.set(nose.x-3*Math.sin(k*PI*.5),0,nose.z-k*26);pushTug.rotation.y=lerp(PI/2,0,Math.min(1,k*2.5));}else svcUpdate(sPushIn,t);
   // jet bridge: extend at 3.5–5.5, retract at 35.5–37
-  P2.setDoor('L1',sst(5.5,6.2,t)-sst(34.6,35.3,t));P2.setDoor('L2',sst(11.9,12.5,t)-sst(22.6,23.2,t));P2.setDoor('CA',sst(8.2,8.9,t)-sst(30,30.6,t));
+  P2.setDoor('L1',sst(5.5,6.2,t)-sst(34.6,35.3,t));P2.setDoor('R2',sst(11.9,12.5,t)-sst(22.6,23.2,t));P2.setDoor('CA',sst(8.2,8.9,t)-sst(30,30.6,t));
   const ret=1-sst(3.5,5.5,t)+sst(35.5,37,t);B2.t2.position.copy(B2.base2).addScaledVector(B2.dir,-4.5*ret);B2.cab.position.copy(B2.baseCab).addScaledVector(B2.dir,-6.5*ret);
   [sGpu,sLoad,sBag,sCat,sFuel,sClean].forEach(s=>svcUpdate(s,t));
   cable.visible=t>5.4&&t<37.8;hose.visible=t>13&&t<25.6;
@@ -878,7 +881,7 @@ const winCol=new THREE.Color(0xffd79a);
 function applyTod(dt){const T=TOD[tod],k=Math.min(1,dt*2.2);
   sun.color.lerp(new THREE.Color(T.sun[0]),k);sun.intensity=lerp(sun.intensity,T.sun[1],k);sun.position.lerp(new V(...T.pos),k);
   hemi.color.lerp(new THREE.Color(T.hemi[0]),k);hemi.groundColor.lerp(new THREE.Color(T.hemi[1]),k);hemi.intensity=lerp(hemi.intensity,T.hemi[2],k);
-  fill.intensity=lerp(fill.intensity,T.fill,k);
+  fill.intensity=lerp(fill.intensity,T.fill,k);planes.forEach(p=>{if(p.fusMat)p.fusMat.emissiveIntensity=todK.win*1.15;});
   sky.material.uniforms.top.value.lerp(new THREE.Color(T.sky[0]),k);sky.material.uniforms.hor.value.lerp(new THREE.Color(T.sky[1]),k);scene.fog.color.copy(sky.material.uniforms.hor.value);
   sky.position.copy(camera.position);const cd=camera.position.distanceTo(controls.target);scene.fog.near=cd*1.6+40;scene.fog.far=cd*6+500;renderer.toneMappingExposure=lerp(renderer.toneMappingExposure,T.exp,k);
   flood.forEach(s=>s.intensity=lerp(s.intensity,T.flood*5,k));todK.win=lerp(todK.win,T.win,k);
@@ -941,7 +944,7 @@ const SHOTS=[
  {id:'02',title:'进港滑行',ta:[0,3.45],d:12,cam:dolly(()=>SL(18,-34).setY(13),()=>SL(11,-27).setY(8),()=>PP().setY(2).add(new V(0,0,-6)),()=>PP().setY(2).add(new V(0,0,-8)))},
  {id:'03',title:'靠桥 · 接电',ta:[3.3,6.2],d:9,cam:dolly(()=>SL(-17,-24).setY(10),()=>SL(-12,-19).setY(7.5),()=>SL(-3,-10).setY(4),()=>SL(-1.5,-11).setY(3.2))},
  {id:'04',title:'服务车进场',ta:[6.2,12.8],d:10,cam:orbit(SL(0,4),42,24,55,110)},
- {id:'05',title:'配餐车升降',ta:[10.2,12.4],d:9,cam:dolly(()=>SL(-20,22).setY(7),()=>SL(-16,17).setY(6),()=>SL(-5,7.7).setY(2.8),()=>SL(-4.5,7.7).setY(3.4))},
+ {id:'05',title:'配餐车升降',ta:[10.2,12.4],d:9,cam:dolly(()=>SL(20,24).setY(7),()=>SL(16,19).setY(6),()=>SL(5,8.6).setY(2.8),()=>SL(4.5,8.6).setY(3.4))},
  {id:'06',title:'加油 · 装卸行李',ta:[12.8,19],d:10,cam:dolly(()=>SL(26,20).setY(7),()=>SL(23,6).setY(6),()=>SL(5,5).setY(1.6),()=>SL(6,2).setY(1.6))},
  {id:'07',title:'登机',ta:[21,35],d:9,cam:orbit(SL(0,2),48,32,20,70)},
  {id:'08',title:'撤桥 · 推出',ta:[35.3,41],d:10,cam:dolly(()=>SL(-26,-24).setY(15),()=>SL(-30,14).setY(14),()=>PP().setY(2),()=>PP().setY(2))},
