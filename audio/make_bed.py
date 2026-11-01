@@ -48,5 +48,5 @@ st = np.stack([L, R], 1); st = st / np.abs(st).max() * .5
 import os; os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 with wave.open('music_bed.wav', 'w') as w:
     w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR); w.writeframes((st * 32767).astype(np.int16).tobytes())
-subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', 'music_bed.wav', '-c:a', 'libmp3lame', '-b:a', '128k', 'music_bed.mp3'], check=True)
+subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', 'music_bed.wav', '-c:a', 'libmp3lame', '-b:a', '128k', 'watch/music_bed.mp3'], check=True)
 print('ok')

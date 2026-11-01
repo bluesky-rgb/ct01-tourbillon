@@ -15,9 +15,9 @@ VOICE = os.environ.get('MINIMAX_VOICE') or 'Chinese (Mandarin)_Gentleman'
 MODEL = os.environ.get('MINIMAX_MODEL') or 'speech-2.6-hd'
 SPEED = float(os.environ.get('MINIMAX_SPEED') or '1.0')
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-# 可选参数：文案 json 和输出目录（默认是手表的 audio/narration.json → narration/）
-src = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, 'audio', 'narration.json')
-out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, 'narration')
+# 可选参数：文案 json 和输出目录（默认是手表的 watch/audio/narration.json → watch/narration/）
+src = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, 'watch', 'audio', 'narration.json')
+out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, 'watch', 'narration')
 lines = json.load(open(src, encoding='utf-8'))
 os.makedirs(out, exist_ok=True)
 mpath = os.path.join(out, 'manifest.json')

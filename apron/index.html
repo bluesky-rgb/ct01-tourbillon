@@ -936,7 +936,7 @@ const Music={on:true,playing:false,buf:null,gain:null,timer:null,
       this.timer=setTimeout(()=>loop(at+D-X),(at+D-X-ctx.currentTime-1)*1000);};loop(ctx.currentTime+.05);},
   stop(){if(!this.playing)return;this.playing=false;clearTimeout(this.timer);const g=this.gain;if(!g)return;this.gain=null;try{g.gain.cancelScheduledValues(audio.currentTime);g.gain.setValueAtTime(g.gain.value,audio.currentTime);g.gain.linearRampToValueAtTime(0,audio.currentTime+2);setTimeout(()=>g.disconnect(),2300);}catch(e){}},
   duck(v){if(this.gain)this.gain.gain.setTargetAtTime(v?.2:.5,audio.currentTime,.35);}};
-const VO=new Set(['01','02','03','04','05','06','07','08','09','10']);const clipLen={'01':13.4,'02':12.6,'03':10.2,'04':10.9,'05':8.3,'06':7.7,'07':8.1,'08':7.8,'09':8.4,'10':10.2};
+const VO=new Set(['01','02','03','04','05','06','07','08','09','10']);const clipLen={'01':13.4,'02':12.6,'03':10.2,'04':13.5,'05':8.3,'06':7.7,'07':8.1,'08':7.8,'09':8.4,'10':10.2};
 const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;let voiceOn=TTS||VO.size>0,speaking=false,clip=null,zhVoice=null;
 function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/zh[-_]CN/i.test(v.lang))||vs.find(v=>/^zh/i.test(v.lang))||null;}if(TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
 // narration: decoded clip through AudioKit → plain <audio> element → browser speech, whichever works first
@@ -961,7 +961,7 @@ function soundStatus(el,idle){const s=AudioKit.state(),e=AudioKit.error();
 const NARR={'01':'这是照着一张机坪航拍照片，用代码一比一重建的停机位。三架客机、四座登机桥、七十多台地勤车辆，连地面标线和影子的方向，都对着原图摆放。',
  '02':'现在从头看中间这个机位的一次完整过站。飞机沿着黄色引导线滑进来，前方的引导员举着指挥棒，墙上的停靠引导屏在倒数剩余距离，到位时显示停止。',
  '03':'飞机停稳，放好轮挡。登机桥伸出来对准前舱门，地面电源车接上电缆，发动机随之关闭，由地面接管供电。',
- '04':'各种服务车按时间表依次开进机位：行李传送带车和行李拖车队到后货舱，配餐车到后舱门，加油车停在右侧机翼下面。',
+ '04':'各种服务车按时间表依次开进机位。右侧，行李传送带车和行李拖车队停到后货舱，配餐车停到右后舱门，加油车停在右侧机翼前方。左侧留给旅客，走登机桥上下飞机。',
  '05':'配餐车的车厢通过剪式升降架，整个升到舱门的高度，把餐车推进机舱，完成后再降下来离开。',
  '06':'同一时间，加油车接上软管给机翼油箱加油，传送带把行李一件件卸下来，随后再把新的行李装上去。',
  '07':'清洁完成后开始登机。右边的过站进度图，实时显示每一项作业的进度，和舱内的旅客人数。',

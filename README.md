@@ -2,9 +2,11 @@
 
 用代码从零搭出来的可交互 3D 场景，每个都是单个 HTML 文件（Three.js r128），没有构建步骤。
 
+在线打开：**https://bluesky-rgb.github.io/ct01-tourbillon/**（GitHub Pages，根目录 `index.html` 是作品集首页）
+
 | 作品 | 入口 | 一句话 |
 | --- | --- | --- |
-| CT-01 陀飞轮万年历 | `index.html` | 200 多个零件按真实齿比联动，显示此刻时间，带 MiniMax 配音讲解 |
+| CT-01 陀飞轮万年历 | `watch/index.html` | 200 多个零件按真实齿比联动，显示此刻时间，带 MiniMax 配音讲解 |
 | 机坪俯瞰 | `apron/index.html` | 照着一张航拍照片 1:1 重建的停机位，中间机位完整模拟一次 45 分钟过站，带配音运镜讲解 |
 
 ---
@@ -13,7 +15,7 @@
 
 一块完全用代码造出来的 3D 机械表：双轴飞行陀飞轮、万年历、月相、自动上链摆陀，200 多个零件按真实齿比联动，表针显示此刻的真实时间。
 
-整个页面就是一个 `index.html`（Three.js r128），没有构建步骤。
+整个页面就是一个 `watch/index.html`（Three.js r128），没有构建步骤。
 
 ### 能做什么
 
@@ -26,11 +28,11 @@
 
 | 路径 | 说明 |
 | --- | --- |
-| `index.html` | 页面本体 |
-| `music_bed.mp3` | 背景音乐：96 秒无缝循环的轻氛围音，由 `audio/make_bed.py` 合成 |
-| `audio/narration.json` | 讲解配音文案（14 段，第 11 步分 a/b/c 三段） |
+| `watch/index.html` | 页面本体 |
+| `watch/music_bed.mp3` | 背景音乐：96 秒无缝循环的轻氛围音，由 `audio/make_bed.py` 合成 |
+| `watch/audio/narration.json` | 讲解配音文案（14 段，第 11 步分 a/b/c 三段） |
 | `audio/gen_voice.py` | 调用 MiniMax 生成配音（`speech-2.6-hd`，音色 `Chinese (Mandarin)_Gentleman`） |
-| `narration/` | 生成好的配音 `<id>.mp3` 和指纹 `manifest.json` |
+| `watch/narration/` | 生成好的配音 `<id>.mp3` 和指纹 `manifest.json` |
 | `.github/workflows/voice.yml` | 改了文案就自动重新生成配音 |
 
 ### 配音是怎么生成的
@@ -41,15 +43,15 @@
 - Variable `MINIMAX_URL`：海外账号填 `https://api.minimax.io/v1/t2a_v2`，国内账号不用填
 - 可选 Variable：`MINIMAX_VOICE`、`MINIMAX_MODEL`、`MINIMAX_SPEED`
 
-之后只要修改 `audio/narration.json` 或 `apron/audio/narration.json` 并推送，GitHub Actions 就会只重新生成改动过的段落，并把 mp3 提交回 `narration/`。也可以在 Actions 页面手动运行「生成 MiniMax 配音」。
+之后只要修改 `watch/audio/narration.json` 或 `apron/audio/narration.json` 并推送，GitHub Actions 就会只重新生成改动过的段落，并把 mp3 提交回各自的 `narration/` 目录。也可以在 Actions 页面手动运行「生成 MiniMax 配音」。
 
-页面只播放 `index.html` 里 `VO` 列表登记过的配音；没登记的段落会退回浏览器自带语音。
+页面只播放各自 `index.html` 里 `VO` 列表登记过的配音；没登记的段落会退回浏览器自带语音。
 
 ### 本地预览
 
 ```bash
 python3 -m http.server 8000
-# 打开 http://localhost:8000
+# 打开 http://localhost:8000 （首页），或 /watch/、/apron/
 ```
 
 （需要用本地服务器打开，直接双击 `index.html` 时浏览器会拦截音频文件的读取。）
