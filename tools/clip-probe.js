@@ -25,9 +25,14 @@ window.__probe=(samples)=>{const out=[];const ray=new THREE.Raycaster();ray.far=
       pl.g.traverse(o=>{if(!o.isMesh||o.material.isMeshBasicMaterial)return;const p=o.geometry.attributes.position;let n=0;
         for(let i=0;i<p.count;i++){const v=new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);if(!B.containsPoint(v))continue;if(inside(v,gs).length)n++;}
         if(n)out.push({t,veh:vname,hit:pl.name+' / '+o.userData.name+'（反向）',pts:n,of:p.count});});});};
-  for(const t of samples){TA.t=t;TA.play=false;taUpdate(0);scene.updateMatrixWorld(true);movers.forEach(g=>{check(g,t);rev(g,t);});if(t>=37)for(const x of [-80,-40,0,40,80]){train.position.x=x;scene.updateMatrixWorld(true);planeCheck(t+'@train'+x);}}
+  const meshes=g=>{const a=[];g.traverse(o=>{if(o.isMesh&&!o.material.isMeshBasicMaterial&&!o.isInstancedMesh)a.push({o,who:''});});return a;};
+  const pair=(gA,nameA,gB,nameB,t)=>{if(!vis(gA)||!vis(gB))return;const A=meshes(gA),Bm=meshes(gB);let n1=0,n2=0;const BA=new THREE.Box3().setFromObject(gA),BB=new THREE.Box3().setFromObject(gB);if(!BA.intersectsBox(BB))return;
+    gA.traverse(o=>{if(!o.isMesh||o.material.isMeshBasicMaterial)return;const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){const v=new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);if(BB.containsPoint(v)&&inside(v,Bm).length)n1++;}});
+    gB.traverse(o=>{if(!o.isMesh||o.material.isMeshBasicMaterial)return;const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){const v=new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);if(BA.containsPoint(v)&&inside(v,A).length)n2++;}});
+    if(n1||n2)out.push({t,veh:nameA,hit:nameB+(n2?'（反向 '+n2+'）':''),pts:n1+n2,of:0});};
+  for(const t of samples){TA.t=t;TA.play=false;taUpdate(0);scene.updateMatrixWorld(true);movers.forEach(g=>{check(g,t);rev(g,t);});pair(bridges[1].g,'2号登机桥',P2.g,'中间客机',t);if(t>=37)for(const x of [-80,-40,0,40,80]){train.position.x=x;scene.updateMatrixWorld(true);planeCheck(t+'@train'+x);}}
 
-  if(samples.length===0){TA.t=14;taUpdate(0);scene.updateMatrixWorld(true);statics.forEach(g=>{check(g,'static');rev(g,'static');});
+  if(samples.length===0){TA.t=14;taUpdate(0);scene.updateMatrixWorld(true);pair(bridges[0].g,'1号登机桥',planes[0].g,'左侧客机','static');pair(bridges[2].g,'3号登机桥',planes[2].g,'右侧客机','static');pair(bridges[1].g,'2号登机桥',P2.g,'中间客机','static');TA.t=14;taUpdate(0);scene.updateMatrixWorld(true);statics.forEach(g=>{check(g,'static');rev(g,'static');});
     for(let x=-80;x<=80;x+=4){train.position.x=x;scene.updateMatrixWorld(true);train.children.forEach(c=>check(c,'train@'+x));}}
   return out;};
 
