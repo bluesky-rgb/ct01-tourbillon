@@ -82,6 +82,14 @@ h1 em{font-style:normal;color:var(--accent)}
 .bar{height:3px;border-radius:2px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--accent)}
 .seg.spd{flex:none}.seg.spd button{padding:9px 10px}
 @media (max-width:1099px){.gantt{display:none}.mini{display:grid}}
+.btn.demo{background:var(--fg);border-color:var(--fg);color:var(--on-fg);font-size:15px;padding:12px}
+.t-hd{display:flex;align-items:center;gap:10px}.t-hd b{font-family:var(--f-display);font-size:19px;flex:1;min-width:0}
+.t-step{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.t-text{margin:0;font-size:14px;line-height:1.65;min-height:4.9em;max-width:62ch}
+.t-ctl{display:flex;align-items:center;gap:6px}.t-ctl .btn{flex:none}.t-ctl #tPause{min-width:4.2em}
+.t-tip{flex:1;min-width:0;font-size:11.5px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn.tiny[aria-pressed="false"]{opacity:.5;text-decoration:line-through}#btnTraffic.tiny[aria-pressed="false"]{text-decoration:none}
+@media (max-width:420px){.t-tip{display:none}.t-ctl{justify-content:space-between}}
 [hidden]{display:none!important}
 </style>
 
@@ -106,7 +114,18 @@ h1 em{font-style:normal;color:var(--accent)}
 </aside>
 
 <div class="dock">
-  <div class="drawer">
+  <div class="drawer" id="tourCard" hidden>
+    <div class="t-hd"><span class="t-step" id="tStep">1 / 10</span><b id="tTitle"></b><button class="btn tiny" id="tExit">退出</button></div>
+    <p class="t-text" id="tText"></p>
+    <div class="bar"><i id="tBar"></i></div>
+    <div class="t-ctl">
+      <button class="btn tiny" id="tPrev" aria-label="上一段">‹</button><button class="btn tiny" id="tPause">暂停</button><button class="btn tiny" id="tNext" aria-label="下一段">›</button>
+      <span class="t-tip">讲解中也可以拖动画面</span>
+      <button class="btn tiny" id="tVoice" aria-pressed="true">配音</button><button class="btn tiny" id="tMusic" aria-pressed="true">音乐</button>
+    </div>
+  </div>
+  <div class="drawer" id="drawer">
+    <button class="btn demo" id="btnTour">▶ 观看讲解 · 约 2 分钟</button>
     <div class="seg" role="group" aria-label="视角">
       <button data-view="aerial" aria-pressed="true">航拍视角</button>
       <button data-view="free">自由视角</button>
@@ -697,7 +716,7 @@ let gLast=0;function ganttUpdate(t){if(performance.now()-gLast<120)return;gLast=
 const bPlay=$('btnPlay');function syncPlay(){bPlay.textContent=TA.play?'暂停过站':'继续过站';bPlay.setAttribute('aria-pressed',String(!TA.play));}
 bPlay.addEventListener('click',()=>{TA.play=!TA.play;syncPlay();});
 document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>{TA.speed=+b.dataset.speed;document.querySelectorAll('[data-speed]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));}));
-$('btnRestart').addEventListener('click',()=>{TA.t=0;TA.play=true;syncPlay();goView('stand');});
+$('btnRestart').addEventListener('click',()=>{if(tour)tourStop();TA.t=0;TA.play=true;syncPlay();goView('stand');});
 gRows.addEventListener('click',e=>{const r=e.target.closest('.g-row');if(!r)return;const R=ROWS.find(x=>x.k===r.dataset.k);TA.t=R.a+.01;});
 
 /* ================= bake static models: merge each group's parts per material (fewer draw calls) ================= */
@@ -766,12 +785,83 @@ let traffic=true;const bT=$('btnTraffic');bT.addEventListener('click',()=>{traff
 
 /* resize */
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;
-  const lab=document.querySelector('.label').getBoundingClientRect(),dr=document.querySelector('.drawer').getBoundingClientRect();padT=lab.height?lab.bottom+8:0;padB=dr.height?h-dr.top+8:0;
+  const lab=document.querySelector('.label').getBoundingClientRect(),dr=document.querySelector('.drawer:not([hidden])').getBoundingClientRect();padT=lab.height?lab.bottom+8:0;padB=dr.height?h-dr.top+8:0;
   if(w>=1100){padT=0;padB=0;}else if(w>=900){padT=Math.min(padT,h*.22);padB=Math.min(padB,h*.4);}
   if(curView==='aerial'&&!camTween){const tg=VIEWS.aerial.tg;camera.position.sub(controls.target).setLength(aerialDist()).add(controls.target);}
   camera.setViewOffset(w,h,0,(padB-padT)/2,w,h);camera.updateProjectionMatrix();}
 addEventListener('resize',resize);
 controls.target.copy(VIEWS.aerial.tg);camera.position.set(0,380,70);camera.aspect=innerWidth/innerHeight;resize();camera.position.copy(VIEWS.aerial.pos());
+
+/* ================= audio: ambient bed + narration (MiniMax clips, browser voice as fallback) ================= */
+let audio=null;function getAudio(){if(!audio)audio=new (window.AudioContext||window.webkitAudioContext)();audio.resume();return audio;}
+const Music={on:true,playing:false,buf:null,gain:null,timer:null,
+  async start(){if(this.playing)return;let ctx;try{ctx=getAudio();}catch(e){return;}this.playing=true;
+    try{if(!this.buf){const r=await fetch('music_bed.mp3');if(!r.ok)throw 0;this.buf=await ctx.decodeAudioData(await r.arrayBuffer());}}catch(e){this.playing=false;return;}
+    if(!this.playing)return;const g=ctx.createGain();g.gain.value=0;g.connect(ctx.destination);this.gain=g;g.gain.linearRampToValueAtTime(.5,ctx.currentTime+3);
+    const X=4,D=this.buf.duration-.1;const loop=at=>{if(!this.playing)return;const s=ctx.createBufferSource(),e=ctx.createGain();s.buffer=this.buf;s.connect(e);e.connect(g);
+      e.gain.setValueAtTime(0,at);e.gain.linearRampToValueAtTime(1,at+X);e.gain.setValueAtTime(1,at+D-X);e.gain.linearRampToValueAtTime(0,at+D);s.start(at,.05);s.stop(at+D+.05);
+      this.timer=setTimeout(()=>loop(at+D-X),(at+D-X-ctx.currentTime-1)*1000);};loop(ctx.currentTime+.05);},
+  stop(){if(!this.playing)return;this.playing=false;clearTimeout(this.timer);const g=this.gain;if(!g)return;this.gain=null;try{g.gain.cancelScheduledValues(audio.currentTime);g.gain.setValueAtTime(g.gain.value,audio.currentTime);g.gain.linearRampToValueAtTime(0,audio.currentTime+2);setTimeout(()=>g.disconnect(),2300);}catch(e){}},
+  duck(v){if(this.gain)this.gain.gain.setTargetAtTime(v?.2:.5,audio.currentTime,.35);}};
+const VO=new Set(['01','02','03','04','05','06','07','08','09','10']);const clipLen={'01':13.4,'02':12.6,'03':10.2,'04':10.9,'05':8.3,'06':7.7,'07':8.1,'08':7.8,'09':8.4,'10':10.2};
+VO.forEach(id=>{const a=new Audio();a.preload='metadata';a.src='narration/'+id+'.mp3';a.addEventListener('loadedmetadata',()=>{clipLen[id]=a.duration;});});
+const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;let voiceOn=TTS||VO.size>0,speaking=false,clip=null,zhVoice=null;
+function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();zhVoice=vs.find(v=>/zh[-_]CN/i.test(v.lang))||vs.find(v=>/^zh/i.test(v.lang))||null;}if(TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
+function hush(){if(clip){try{clip.pause();}catch(e){}clip=null;}if(TTS)try{speechSynthesis.cancel();}catch(e){}speaking=false;Music.duck(false);}
+function say(text,id){if(!voiceOn||!text)return;hush();
+  if(VO.has(id)){const a=new Audio('narration/'+id+'.mp3');clip=a;speaking=true;Music.duck(true);const done=()=>{if(clip===a){clip=null;speaking=false;Music.duck(false);}};a.onended=a.onerror=done;a.play().catch(done);return;}
+  if(!TTS)return;const u=new SpeechSynthesisUtterance(text);u.lang='zh-CN';if(zhVoice)u.voice=zhVoice;u.rate=1.05;u.onstart=()=>{speaking=true;Music.duck(true);};u.onend=u.onerror=()=>{speaking=false;Music.duck(false);};speaking=true;try{speechSynthesis.speak(u);}catch(e){speaking=false;}}
+
+/* ================= cinematic tour: each shot drives the turnaround clock, the camera and the narration ================= */
+const NARR={'01':'这是照着一张机坪航拍照片，用代码一比一重建的停机位。三架客机、四座登机桥、七十多台地勤车辆，连地面标线和影子的方向，都对着原图摆放。',
+ '02':'现在从头看中间这个机位的一次完整过站。飞机沿着黄色引导线滑进来，前方的引导员举着指挥棒，墙上的停靠引导屏在倒数剩余距离，到位时显示停止。',
+ '03':'飞机停稳，放好轮挡。登机桥伸出来对准前舱门，地面电源车接上电缆，发动机随之关闭，由地面接管供电。',
+ '04':'各种服务车按时间表依次开进机位：行李传送带车和行李拖车队到后货舱，配餐车到后舱门，加油车停在右侧机翼下面。',
+ '05':'配餐车的车厢通过剪式升降架，整个升到舱门的高度，把餐车推进机舱，完成后再降下来离开。',
+ '06':'同一时间，加油车接上软管给机翼油箱加油，传送带把行李一件件卸下来，随后再把新的行李装上去。',
+ '07':'清洁完成后开始登机。右边的过站进度图，实时显示每一项作业的进度，和舱内的旅客人数。',
+ '08':'关舱门，撤登机桥。牵引车顶住机头，把飞机推出机位并转向，发动机在推出的过程中启动。',
+ '09':'牵引车脱开，飞机自己滑向跑道。机位清空，等待下一架飞机进港。整个过站，大约四十五分钟。',
+ '10':'到了夜里，高杆灯、候机楼的窗户和地面的绿色引导灯都会亮起来。接下来你可以自己拖动视角，点任何一辆车，看看它是做什么的。'};
+const PP=()=>P2.g.position.clone();
+const orbit=(c,R,h,a0,a1)=>u=>{const a=lerp(a0,a1,u)*D2R;return [new V(c.x+Math.cos(a)*R,h,c.z+Math.sin(a)*R),c.clone().setY(1.5)];};
+const dolly=(p0,p1,t0,t1)=>u=>[p0().lerp(p1(),u),t0().lerp(t1(),u)];
+const SHOTS=[
+ {id:'01',title:'一张照片，一座机坪',ta:[14,14.6],d:11,tod:'day',fov:12,cam:u=>{const d=aerialDist(),k=lerp(1.12,.92,u);return [new V(0,380,70).normalize().multiplyScalar(d*k).add(new V(0,0,2.5)),new V(0,0,2.5)];}},
+ {id:'02',title:'进港滑行',ta:[0,3.45],d:12,cam:dolly(()=>SL(18,-34).setY(13),()=>SL(11,-27).setY(8),()=>PP().setY(2).add(new V(0,0,-6)),()=>PP().setY(2).add(new V(0,0,-8)))},
+ {id:'03',title:'靠桥 · 接电',ta:[3.3,6.2],d:9,cam:dolly(()=>SL(-17,-24).setY(10),()=>SL(-12,-19).setY(7.5),()=>SL(-3,-10).setY(4),()=>SL(-1.5,-11).setY(3.2))},
+ {id:'04',title:'服务车进场',ta:[6.2,12.8],d:10,cam:orbit(SL(0,4),42,24,55,110)},
+ {id:'05',title:'配餐车升降',ta:[10.2,12.4],d:9,cam:dolly(()=>SL(-22,24).setY(8),()=>SL(-17,18).setY(6.5),()=>SL(-4.4,10).setY(3.4),()=>SL(-4.4,10).setY(4))},
+ {id:'06',title:'加油 · 装卸行李',ta:[12.8,19],d:10,cam:dolly(()=>SL(26,20).setY(7),()=>SL(23,6).setY(6),()=>SL(5,5).setY(1.6),()=>SL(6,2).setY(1.6))},
+ {id:'07',title:'登机',ta:[21,35],d:9,cam:orbit(SL(0,2),48,32,20,70)},
+ {id:'08',title:'撤桥 · 推出',ta:[35.3,41],d:10,cam:dolly(()=>SL(26,-24).setY(15),()=>SL(30,12).setY(14),()=>PP().setY(2),()=>PP().setY(2))},
+ {id:'09',title:'离港',ta:[41,44.6],d:9,cam:dolly(()=>SL(-6,54).setY(10),()=>SL(34,52).setY(12),()=>PP().setY(2),()=>PP().setY(2))},
+ {id:'10',title:'夜色中的机坪',ta:[14,16],d:11,tod:'night',cam:orbit(new V(0,0,0),120,72,40,100)}];
+let tour=null;const tourCard=$('tourCard'),drawerEl=document.querySelector('#drawer');
+function shotDur(st){const a=clipLen[st.id],b=TTS&&voiceOn&&!VO.has(st.id)?NARR[st.id].length*.24+1:0;return Math.max(st.d,(a||0)+1.2,b);}
+function setTod(v){tod=v;document.querySelectorAll('[data-tod]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.tod===v)));}
+function shotEnter(i){const st=SHOTS[i];tour.i=i;tour.t=0;tour.user=false;tour.D=shotDur(st);tour.from=[camera.position.clone(),controls.target.clone(),camera.fov];tour.fov=st.fov||38;
+  if(explodeT>0){explodeT=0;syncEx();}setFocus(null);setTod(st.tod||'day');TA.t=st.ta[0];TA.play=true;TA.speed=(st.ta[1]-st.ta[0])/(tour.D*.8);
+  camTween=null;curView='tour';document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));
+  $('tStep').textContent=`${i+1} / ${SHOTS.length}`;$('tTitle').textContent=st.title;$('tText').textContent=NARR[st.id];say(NARR[st.id],st.id);}
+function tourStart(){if(Music.on)Music.start();tour={i:0,t:0,paused:false};drawerEl.hidden=true;tourCard.hidden=false;$('tPause').textContent='暂停';shotEnter(0);resize();}
+function tourStop(){if(!tour)return;tour=null;hush();Music.stop();tourCard.hidden=true;drawerEl.hidden=false;TA.speed=1;TA.play=true;setTod('day');camera.fov=36;camera.updateProjectionMatrix();
+  document.querySelectorAll('[data-speed]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.speed==='1')));syncPlay();resize();goView('free');}
+function tourPause(v){tour.paused=v;TA.play=!v;$('tPause').textContent=v?'继续':'暂停';if(clip)try{v?clip.pause():clip.play();}catch(e){}if(TTS)try{v?speechSynthesis.pause():speechSynthesis.resume();}catch(e){}}
+$('btnTour').addEventListener('click',tourStart);$('tExit').addEventListener('click',tourStop);
+$('tPause').addEventListener('click',()=>tourPause(!tour.paused));
+$('tNext').addEventListener('click',()=>{if(!tour)return;hush();tourPause(false);tour.i+1<SHOTS.length?shotEnter(tour.i+1):tourStop();});
+$('tPrev').addEventListener('click',()=>{if(!tour)return;hush();tourPause(false);shotEnter(Math.max(0,tour.i-1));});
+const bVo=$('tVoice'),bMu=$('tMusic');if(!TTS&&!VO.size){voiceOn=false;bVo.hidden=true;}
+bVo.addEventListener('click',()=>{voiceOn=!voiceOn;bVo.setAttribute('aria-pressed',String(voiceOn));voiceOn&&tour?say(NARR[SHOTS[tour.i].id],SHOTS[tour.i].id):hush();});
+bMu.addEventListener('click',()=>{Music.on=!Music.on;bMu.setAttribute('aria-pressed',String(Music.on));Music.on&&tour?Music.start():Music.stop();});
+controls.addEventListener('start',()=>{if(tour)tour.user=true;});
+function tourTick(dt){if(!tour)return;if(!tour.paused)tour.t+=dt;const st=SHOTS[tour.i],u=clamp(tour.t/tour.D,0,1);
+  if(!tour.user){const [p,tg]=st.cam(ease(u)),k=ease(clamp(tour.t/2.2,0,1));camera.position.lerpVectors(tour.from[0],p,k);
+    camera.position.y+=Math.sin(k*PI)*Math.max(8,tour.from[0].distanceTo(p)*.3);controls.target.lerpVectors(tour.from[1],tg,k);camera.fov=lerp(tour.from[2],tour.fov,k);camera.updateProjectionMatrix();}
+  if(TA.t>st.ta[1])TA.play=false;
+  $('tBar').style.width=((tour.i+u)/SHOTS.length*100).toFixed(1)+'%';
+  if(tour.t>=tour.D&&(!speaking||tour.t>tour.D+6)){tour.i+1<SHOTS.length?shotEnter(tour.i+1):tourStop();}}
 
 /* ================= loop ================= */
 const clock=new THREE.Clock();const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
@@ -786,7 +876,7 @@ function loop(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
   // beacons, traffic, pushback
   planes.forEach((p,i)=>{const live=i!==1||TA.t<4.2||TA.t>36.8;const on=live&&((t+i*.37)%1.1)<.12;p.beacon.material.color.setHex(on?0xff3030:0x5a0d0d);p.beacon.scale.setScalar(on?1.6:1);});
   if(traffic&&!reduceMotion){train.position.x+=dt*5.5;if(train.position.x>82)train.position.x=-82;bus.position.x-=dt*7;if(bus.position.x<-90)bus.position.x=90;}
-  const tt=taUpdate(dt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
+  tourTick(dt);const tt=taUpdate(dt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
   planes.forEach(p=>{if(p.fans){p.ang=(p.ang||0)+dt*30*(p.rpm||0);p.fans.forEach(f=>f.rotation.z=p.ang);}});
   applyTod(dt);
   controls.update();renderer.render(scene,camera);

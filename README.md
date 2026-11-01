@@ -5,7 +5,7 @@
 | 作品 | 入口 | 一句话 |
 | --- | --- | --- |
 | CT-01 陀飞轮万年历 | `index.html` | 200 多个零件按真实齿比联动，显示此刻时间，带 MiniMax 配音讲解 |
-| 机坪俯瞰 | `apron/index.html` | 照着一张航拍照片 1:1 重建的停机位，中间机位完整模拟一次 45 分钟过站 |
+| 机坪俯瞰 | `apron/index.html` | 照着一张航拍照片 1:1 重建的停机位，中间机位完整模拟一次 45 分钟过站，带配音运镜讲解 |
 
 ---
 
@@ -41,7 +41,7 @@
 - Variable `MINIMAX_URL`：海外账号填 `https://api.minimax.io/v1/t2a_v2`，国内账号不用填
 - 可选 Variable：`MINIMAX_VOICE`、`MINIMAX_MODEL`、`MINIMAX_SPEED`
 
-之后只要修改 `audio/narration.json` 并推送，GitHub Actions 就会只重新生成改动过的段落，并把 mp3 提交回 `narration/`。也可以在 Actions 页面手动运行「生成 MiniMax 配音」。
+之后只要修改 `audio/narration.json` 或 `apron/audio/narration.json` 并推送，GitHub Actions 就会只重新生成改动过的段落，并把 mp3 提交回 `narration/`。也可以在 Actions 页面手动运行「生成 MiniMax 配音」。
 
 页面只播放 `index.html` 里 `VO` 列表登记过的配音；没登记的段落会退回浏览器自带语音。
 
@@ -68,5 +68,7 @@ python3 -m http.server 8000
   进港滑行（引导员挥棒、停靠引导屏倒数距离）→ 轮挡 → 靠桥 → 地面电源 → 下客 → 行李卸装（传送带上行李在动）→ 配餐车剪式升降 → 加油 → 客舱清洁 → 登机 → 撤桥 → 推出 → 发动机启动 → 离港滑行，然后下一架进港
 - 右侧甘特图实时显示每项作业的进度和舱内旅客数，点任意一行可直接跳过去
 - 点任意物体看它的名称
+- 一键讲解：10 段镜头跟着过站流程运镜，MiniMax 配音（文案在 `apron/audio/narration.json`，音频在 `apron/narration/`），配背景音乐，讲解中可以拖动、暂停、跳段
+- 画面：翼型截面的机翼和尾翼、襟翼滑轨整流罩、接触阴影、随昼夜变化的天空和大气雾
 
 三架飞机都使用通用涂装，没有照搬照片里的航空公司标识。
