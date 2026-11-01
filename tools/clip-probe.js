@@ -13,8 +13,10 @@ window.__probe=(samples)=>{const out=[];const ray=new THREE.Raycaster();ray.far=
   const vsolids=g0=>{const a=[];VEH.forEach(v=>{if(v===g0||!vis(v)||(v.parent===train))return;v.traverse(o=>{if(o.isMesh&&!o.material.isMeshBasicMaterial&&!o.isInstancedMesh){a.push({o,who:'车辆'});}});});return a;};
   const check=(g,t)=>{if(!vis(g))return;const pts=vtx(g);const bad={};let n=0;const all=solids.concat(vsolids(g));solidsAll=all;pts.forEach(pt=>{inside(pt,all).forEach(u=>{bad[u]=(bad[u]||0)+1;n++;});});
     for(const u in bad)out.push({t,veh:(g.userData.vname||g.children.find(c=>c.userData&&c.userData.name)?.userData.name),hit:nameOf(u),pts:bad[u],of:pts.length});};
-  for(const t of samples){TA.t=t;TA.play=false;taUpdate(0);scene.updateMatrixWorld(true);movers.forEach(g=>check(g,t));}
+  const others=[];[planes[0],planes[2]].forEach(p=>p.g.traverse(o=>{if(o.isMesh&&!o.material.isMeshBasicMaterial)others.push({o,who:p.name});}));
+  const planeCheck=(t)=>{if(!P2.g.visible)return;const pts=vtx(P2.g);const all=others.concat(vsolids(null)).concat(solids.filter(x=>x.who.indexOf('客机')<0));solidsAll=all;const bad={};pts.forEach(pt=>inside(pt,all).forEach(u=>{bad[u]=(bad[u]||0)+1;}));for(const u in bad)out.push({t,veh:'中间客机',hit:nameOf(u),pts:bad[u],of:pts.length});};
+  for(const t of samples){TA.t=t;TA.play=false;taUpdate(0);scene.updateMatrixWorld(true);movers.forEach(g=>check(g,t));if(t>=37)for(const x of [-80,-40,0,40,80]){train.position.x=x;scene.updateMatrixWorld(true);planeCheck(t+'@train'+x);}}
 
   if(samples.length===0){TA.t=14;taUpdate(0);scene.updateMatrixWorld(true);statics.forEach(g=>check(g,'static'));
-    for(let x=-80;x<=80;x+=4){train.position.x=x;bus.position.x=-x;scene.updateMatrixWorld(true);train.children.forEach(c=>check(c,'train@'+x));check(bus,'bus@'+(-x));}}
+    for(let x=-80;x<=80;x+=4){train.position.x=x;scene.updateMatrixWorld(true);train.children.forEach(c=>check(c,'train@'+x));}}
   return out;};

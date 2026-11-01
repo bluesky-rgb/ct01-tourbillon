@@ -567,17 +567,16 @@ veh(1105,330,40,20,-20,0xd8c9a6,'catering','配餐车');veh(1176,560,42,14,8,0xf
 [[1158,154,0x2d5fa8],[1195,150,0xf2f2ef],[1215,154,0x3f8a5a],[1236,154,0xf2f2ef]].forEach(([a,b,c])=>veh(a,b,14,30,0,c,'car','员工车辆'));
 // bottom row
 [312,340,367,404,432].forEach(a=>veh(a,719,22,20,0,0xe57722,'cart','行李拖车 · 防雨罩'));
-veh(928,724,24,50,0,0x2d3035,'tug','飞机牵引车');
+veh(928,716,24,50,90,0x2d3035,'tug','飞机牵引车');
 [1196,1236,1266,1296,1326].forEach(a=>veh(a,760,20,16,0,0xe6e6e2,'cart','行李拖车'));
 // cones at wingtips and engines
 [[90,505],[396,500],[200,395],[305,395],[560,488],[820,488],[1010,512],[1268,508],[1080,420],[1170,420]].forEach(([a,b])=>veh(a,b,4,4,0,0xf06a1c,'cone','安全锥'));
 
-// moving traffic: a baggage train on the lower service lane and a bus on the top road
+// moving traffic: a baggage train on the lower service lane, on a lane the departing jet never crosses
 const train=new THREE.Group();LG[2].add(train);
 {const tg=veh(0,0,14,24,90,0x2c2f33,'tug','行李牵引车（行驶中）');LG[2].remove(tg);train.add(tg);tg.position.set(0,0,0);tg.rotation.y=-PI/2;
  for(let i=1;i<=4;i++){const c=veh(0,0,16,20,90,0xe57722,'cart','行李拖车（行驶中）');LG[2].remove(c);train.add(c);c.position.set(-i*2.3,0,0);c.rotation.y=-PI/2;}}
-train.position.set(-80,0,W(0,785).z);
-const bus=veh(0,0,26,110,0,0x2b6cb0,'van','摆渡车（行驶中）');bus.position.set(80,0,43);bus.rotation.y=PI/2;bus.scale.y=1.12;
+train.position.set(-80,0,34);
 
 /* ================= crew figures ================= */
 const people=[];
@@ -592,7 +591,7 @@ function person(px,pz,vest,name,parent){const g=new THREE.Group();g.position.set
 
 /* ================= turnaround of the middle stand ================= */
 const P2=planes[1],B2=bridges[1],HOME=P2.home.p.clone();
-const SL=(x,z)=>new V(HOME.x+x,0,HOME.z+z);   // stand-local → world (aircraft nose points to -z)
+const SL=(x,z)=>new V(HOME.x+x,0,HOME.z+z),PUSH=39;   // stand-local → world (aircraft nose points to -z)
 // timeline in minutes; each row is one ground-handling activity
 const ROWS=[
  {k:'in',n:'进港滑行',a:0,b:3},
@@ -669,7 +668,7 @@ let vdLast='';function vdDraw(l1,l2,col,bar){const key=l1+l2+col+(bar==null?'':b
   if(bar!=null){x.fillRect(22,62,212*clamp(bar,0,1),8);}vdT.needsUpdate=true;}
 
 // taxi guidance lights along the lead-in lines (glow at dusk and night)
-const tlPts=[];for(let z=-14;z<=40;z+=2.4)tlPts.push(SL(0,z));for(let x=0;x<=70;x+=2.4)tlPts.push(new V(HOME.x+x,0,HOME.z+37.8));
+const tlPts=[];for(let z=-14;z<=39;z+=2.4)tlPts.push(SL(0,z));for(let x=0;x<=70;x+=2.4)tlPts.push(new V(HOME.x-x,0,HOME.z+39));
 [[150,330,800],[1111,240,800]].forEach(([px,a,b])=>{for(let py=a;py<=b;py+=24)tlPts.push(W(px,py));});
 const tl=new THREE.InstancedMesh(new THREE.CylinderGeometry(.16,.16,.06,8),new THREE.MeshBasicMaterial({color:0x2bff7a}),tlPts.length);
 tlPts.forEach((p,i)=>{const m=new THREE.Matrix4().setPosition(p.x,.05,p.z);tl.setMatrixAt(i,m);});tl.userData={layer:1};LG[1].add(tl);
@@ -680,14 +679,14 @@ function taUpdate(dt){if(TA.play)TA.t=(TA.t+dt*.8*TA.speed)%CYCLE;const t=TA.t;
   // aircraft path: taxi in from the south, park, push back, taxi out east
   const g=P2.g,ho=P2.home;let p=ho.p.clone(),r=ho.r,vis=true;
   if(t<3){p.z+=72*(1-easeOut(t/3));}
-  else if(t>=37.5&&t<41){const e=sst(37.5,41,t),turn=clamp((e-.35)/.65,0,1);p.z+=e*33;p.x-=turn*turn*6;r-=turn*turn*(3-2*turn)*PI/2;}
-  else if(t>=41){const e=easeIn(clamp((t-41.7)/2.6,0,1));p.z+=33;p.x+=-6+e*120;r-=PI/2;vis=t<44.4;}
+  else if(t>=37.5&&t<41){const e=sst(37.5,41,t),turn=clamp((e-.35)/.65,0,1);p.z+=e*PUSH;p.x+=turn*turn*6;r+=turn*turn*(3-2*turn)*PI/2;}
+  else if(t>=41){const e=easeIn(clamp((t-41.7)/2.6,0,1));p.z+=PUSH;p.x+=6-e*120;r+=PI/2;vis=t<44.4;}
   g.position.copy(p);g.rotation.y=r;g.visible=vis;
   const engOn=t<4||t>39.6;P2.spin+=(engOn?1:0-P2.spin)*0;P2.rpm=lerp(P2.rpm||0,engOn?1:0,Math.min(1,dt*(engOn?1.2:.5)));
   // pushback tug: comes in, couples at the nose, rides along during the push, leaves to the east
   if(t>=36&&t<41.2){pushTug.visible=true;const nose=new V(0,0,-P2.L/2-2.2).applyAxisAngle(new V(0,1,0),g.rotation.y).add(g.position);pushTug.position.set(nose.x,0,nose.z);pushTug.rotation.y=g.rotation.y;}
-  else if(t>=41.2&&t<43.2){pushTug.visible=true;const k=sst(41.2,43.2,t),nose=new V(P2.L/2+2.2,0,0).add(ho.p).add(new V(-6,0,33));
-    pushTug.position.set(nose.x+3*Math.sin(k*PI*.5),0,nose.z-k*26);pushTug.rotation.y=lerp(-PI/2,0,Math.min(1,k*2.5));}else svcUpdate(sPushIn,t);
+  else if(t>=41.2&&t<43.2){pushTug.visible=true;const k=sst(41.2,43.2,t),nose=new V(-P2.L/2-2.2,0,0).add(ho.p).add(new V(6,0,PUSH));
+    pushTug.position.set(nose.x-3*Math.sin(k*PI*.5),0,nose.z-k*26);pushTug.rotation.y=lerp(PI/2,0,Math.min(1,k*2.5));}else svcUpdate(sPushIn,t);
   // jet bridge: extend at 3.5–5.5, retract at 35.5–37
   const ret=1-sst(3.5,5.5,t)+sst(35.5,37,t);B2.t2.position.copy(B2.base2).addScaledVector(B2.dir,-4.5*ret);B2.cab.position.copy(B2.baseCab).addScaledVector(B2.dir,-6.5*ret);
   [sGpu,sLoad,sBag,sCat,sFuel,sClean].forEach(s=>svcUpdate(s,t));
@@ -726,7 +725,7 @@ $('btnRestart').addEventListener('click',()=>{if(tour)tourStop();TA.t=0;TA.play=
 gRows.addEventListener('click',e=>{const r=e.target.closest('.g-row');if(!r)return;const R=ROWS.find(x=>x.k===r.dataset.k);TA.t=R.a+.01;});
 
 /* ================= bake static models: merge each group's parts per material (fewer draw calls) ================= */
-const animated=new Set([...svc.map(x=>x.g),...bagCarts,train,bus,pushTug,...chocks,marshal,...crew,P2.g]);
+const animated=new Set([...svc.map(x=>x.g),...bagCarts,train,pushTug,...chocks,marshal,...crew,P2.g]);
 function bake(g){if(!THREE.BufferGeometryUtils)return;g.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(g.matrixWorld).invert(),buckets=new Map();let name=null,layer=null;
   g.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||Array.isArray(o.material)||o.material.isMeshBasicMaterial)return;name=name||o.userData.name;layer=o.userData.layer;
     const geo=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();for(const k of Object.keys(geo.attributes))if(!['position','normal','uv'].includes(k))geo.deleteAttribute(k);
@@ -840,8 +839,8 @@ const SHOTS=[
  {id:'05',title:'配餐车升降',ta:[10.2,12.4],d:9,cam:dolly(()=>SL(-22,24).setY(8),()=>SL(-17,18).setY(6.5),()=>SL(-4.4,10).setY(3.4),()=>SL(-4.4,10).setY(4))},
  {id:'06',title:'加油 · 装卸行李',ta:[12.8,19],d:10,cam:dolly(()=>SL(26,20).setY(7),()=>SL(23,6).setY(6),()=>SL(5,5).setY(1.6),()=>SL(6,2).setY(1.6))},
  {id:'07',title:'登机',ta:[21,35],d:9,cam:orbit(SL(0,2),48,32,20,70)},
- {id:'08',title:'撤桥 · 推出',ta:[35.3,41],d:10,cam:dolly(()=>SL(26,-24).setY(15),()=>SL(30,12).setY(14),()=>PP().setY(2),()=>PP().setY(2))},
- {id:'09',title:'离港',ta:[41,44.6],d:9,cam:dolly(()=>SL(-6,54).setY(10),()=>SL(34,52).setY(12),()=>PP().setY(2),()=>PP().setY(2))},
+ {id:'08',title:'撤桥 · 推出',ta:[35.3,41],d:10,cam:dolly(()=>SL(-26,-24).setY(15),()=>SL(-30,14).setY(14),()=>PP().setY(2),()=>PP().setY(2))},
+ {id:'09',title:'离港',ta:[41,44.6],d:9,cam:dolly(()=>SL(6,60).setY(10),()=>SL(-34,58).setY(12),()=>PP().setY(2),()=>PP().setY(2))},
  {id:'10',title:'夜色中的机坪',ta:[14,16],d:11,tod:'night',cam:orbit(new V(0,0,0),120,72,40,100)}];
 let tour=null;const tourCard=$('tourCard'),drawerEl=document.querySelector('#drawer');
 function shotDur(st){const a=clipLen[st.id],b=TTS&&voiceOn&&!VO.has(st.id)?NARR[st.id].length*.24+1:0;return Math.max(st.d,(a||0)+1.2,b);}
@@ -881,7 +880,7 @@ function loop(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
     for(const m of layerMats[l]){const op=(m.userData.baseOp??1)*layerOp[l],tr=m.userData.baseTr||layerOp[l]<.995;if(m.transparent!==tr){m.transparent=tr;m.needsUpdate=true;}m.opacity=op;m.depthWrite=layerOp[l]>.5;}}
   // beacons, traffic, pushback
   planes.forEach((p,i)=>{const live=i!==1||TA.t<4.2||TA.t>36.8;const on=live&&((t+i*.37)%1.1)<.12;p.beacon.material.color.setHex(on?0xff3030:0x5a0d0d);p.beacon.scale.setScalar(on?1.6:1);});
-  if(traffic&&!reduceMotion){train.position.x+=dt*5.5;if(train.position.x>82)train.position.x=-82;bus.position.x-=dt*7;if(bus.position.x<-90)bus.position.x=90;}
+  if(traffic&&!reduceMotion){train.position.x+=dt*5.5;if(train.position.x>82)train.position.x=-82;}
   tourTick(dt);const tt=taUpdate(dt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
   planes.forEach(p=>{if(p.fans){p.ang=(p.ang||0)+dt*30*(p.rpm||0);p.fans.forEach(f=>f.rotation.z=p.ang);}});
   applyTod(dt);
