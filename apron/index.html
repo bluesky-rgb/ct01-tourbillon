@@ -724,6 +724,28 @@ document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',
 $('btnRestart').addEventListener('click',()=>{if(tour)tourStop();TA.t=0;TA.play=true;syncPlay();goView('stand');});
 gRows.addEventListener('click',e=>{const r=e.target.closest('.g-row');if(!r)return;const R=ROWS.find(x=>x.k===r.dataset.k);TA.t=R.a+.01;});
 
+/* ================= baggage-train traffic that yields at crossings ================= */
+// Lane: the train runs east along z=34. Anything that crosses it (service vehicles, the arriving and
+// departing jet's gear and engines) reserves a stretch of lane for a window of turnaround time.
+const LANE={z0:32.6,z1:35.4},TRAIN_FRONT=1.25,TRAIN_REAR=-10.7;
+const lowParts=[];P2.g.traverse(o=>{if(o.isMesh&&/起落架|发动机|尾喷口|进气道|APU/.test(o.userData.name||''))lowParts.push(o);});
+const occ=[{g:cat},{g:pushTug},{g:bagTug},...bagCarts.map(g=>({g})),{plane:true}];
+const _b=new THREE.Box3(),_c=new THREE.Box3();
+function occBox(o){if(o.plane){if(!P2.g.visible)return null;_b.makeEmpty();lowParts.forEach(m=>_b.union(_c.setFromObject(m)));return _b;}
+  if(!o.g.visible)return null;return _b.setFromObject(o.g);}
+const RES=[];
+(function buildReservations(){const keep=TA.t,open=occ.map(()=>null);
+  for(let t=0;t<=CYCLE+1e-6;t+=.05){TA.t=t;TA.play=false;taUpdate(0);scene.updateMatrixWorld(true);
+    occ.forEach((o,i)=>{const b=occBox(o);const hit=b&&!b.isEmpty()&&b.max.z>LANE.z0&&b.min.z<LANE.z1;
+      if(hit){if(!open[i])open[i]={t0:t,t1:t,x0:b.min.x,x1:b.max.x};else{open[i].t1=t;open[i].x0=Math.min(open[i].x0,b.min.x);open[i].x1=Math.max(open[i].x1,b.max.x);}}
+      else if(open[i]){RES.push(open[i]);open[i]=null;}});}
+  open.forEach(r=>r&&RES.push(r));TA.t=keep;TA.play=true;taUpdate(0);})();
+function trainStep(dt){const x=train.position.x,front=x+TRAIN_FRONT,rear=x+TRAIN_REAR,look=TA.play?3.4*.8*TA.speed+.15:.15;let block=false;
+  for(const r of RES){const now=r.t0<=TA.t+.06&&r.t1>=TA.t-.06,soon=r.t1>=TA.t-.06&&r.t0<=TA.t+look;if(!soon)continue;const z0=r.x0-1.6,z1=r.x1+1.6;
+    if(now&&z1>rear&&z0<front){train.position.x=z0-TRAIN_FRONT-.4;return;}   // after a time jump: never sit inside an occupied stretch
+    if(z0>=front&&z0-front<6)block=true;}
+  if(!block){train.position.x+=dt*5.5;if(train.position.x>82)train.position.x=-82;}}
+
 /* ================= bake static models: merge each group's parts per material (fewer draw calls) ================= */
 const animated=new Set([...svc.map(x=>x.g),...bagCarts,train,pushTug,...chocks,marshal,...crew,P2.g]);
 function bake(g){if(!THREE.BufferGeometryUtils)return;g.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(g.matrixWorld).invert(),buckets=new Map();let name=null,layer=null;
@@ -880,7 +902,7 @@ function loop(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
     for(const m of layerMats[l]){const op=(m.userData.baseOp??1)*layerOp[l],tr=m.userData.baseTr||layerOp[l]<.995;if(m.transparent!==tr){m.transparent=tr;m.needsUpdate=true;}m.opacity=op;m.depthWrite=layerOp[l]>.5;}}
   // beacons, traffic, pushback
   planes.forEach((p,i)=>{const live=i!==1||TA.t<4.2||TA.t>36.8;const on=live&&((t+i*.37)%1.1)<.12;p.beacon.material.color.setHex(on?0xff3030:0x5a0d0d);p.beacon.scale.setScalar(on?1.6:1);});
-  if(traffic&&!reduceMotion){train.position.x+=dt*5.5;if(train.position.x>82)train.position.x=-82;}
+  trainStep(traffic&&!reduceMotion?dt:0);
   tourTick(dt);const tt=taUpdate(dt);ganttUpdate(tt);tl.material.color.setRGB(.17*todK.win*1.6+.02,1*todK.win*1.6+.04,.48*todK.win*1.6+.03);tl.visible=todK.win>.05;
   planes.forEach(p=>{if(p.fans){p.ang=(p.ang||0)+dt*30*(p.rpm||0);p.fans.forEach(f=>f.rotation.z=p.ang);}});
   applyTod(dt);
