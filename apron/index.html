@@ -636,7 +636,7 @@ const bagTug=veh(0,0,14,22,0,0x2c2f33,'tug','行李牵引车');const bagCarts=[0
 const sBag=service(bagTug,[[46,40],[24,34],[9,22],[6.5,13.5]],[7.2,9.5,29.5,32],{train:bagCarts,out:[[6.5,13.5],[5.6,10],[7.6,7.4],[14,8],[30,16],[54,40]]});
 // catering truck to the left aft door, box lifts on scissors
 const cat=veh(0,0,30,64,0,0xf1f1ee,'catering','配餐车 · 剪式升降');
-const sCat=service(cat,[[-38,36],[-18,30],[-8,18],[-4.4,10.2]],[8.6,10.4,24.6,26.6]);
+const sCat=service(cat,[[-8,44],[-12,24],[-12.5,10.6],[-9,8],[-5.8,7.7]],[8.6,10.4,24.6,26.6]);
 // fuel truck under the right wing
 const fuel=veh(0,0,26,80,0,0xe6e6e2,'fuel','加油车 · 航空煤油');
 const sFuel=service(fuel,[[9,-46],[9,-30],[9.6,-16],[10.2,-5.6]],[11.2,12.8,25.8,27.8]);
@@ -692,7 +692,7 @@ function taUpdate(dt){if(TA.play)TA.t=(TA.t+dt*.8*TA.speed)%CYCLE;const t=TA.t;
   [sGpu,sLoad,sBag,sCat,sFuel,sClean].forEach(s=>svcUpdate(s,t));
   cable.visible=t>5.4&&t<37.8;hose.visible=t>13&&t<25.6;
   // catering box rises to the door sill, then lowers
-  cat.userData.box.position.y=cat.userData.boxY+2.2*(sst(10.6,11.8,t)-sst(23.2,24.4,t));cat.userData.sc.scale.y=.2+(cat.userData.box.position.y-cat.userData.boxY)/2.2*1.4;
+  const LIFT=1.6;cat.userData.box.position.y=cat.userData.boxY+LIFT*(sst(10.6,11.8,t)-sst(23.2,24.4,t));cat.userData.sc.scale.y=.2+(cat.userData.box.position.y-cat.userData.boxY)/LIFT*1.1;
   loader.userData.belt.rotation.x=-.06-.3*(sst(8,8.8,t)-sst(30,30.6,t));
   const flowing=(t>8.8&&t<17)||(t>19&&t<30);const dir=t<18?1:-1,m4=new THREE.Matrix4();
   for(let i=0;i<6;i++){let f=((TA.t*1.6*dir+i/6)%1+1)%1;const z=lerp(-2.1,2.1,f);m4.compose(new V(0,.3,z),new THREE.Quaternion(),new V(flowing?1:0,flowing?1:0,flowing?1:0));bagG.setMatrixAt(i,m4);}bagG.instanceMatrix.needsUpdate=true;
@@ -836,7 +836,7 @@ const SHOTS=[
  {id:'02',title:'进港滑行',ta:[0,3.45],d:12,cam:dolly(()=>SL(18,-34).setY(13),()=>SL(11,-27).setY(8),()=>PP().setY(2).add(new V(0,0,-6)),()=>PP().setY(2).add(new V(0,0,-8)))},
  {id:'03',title:'靠桥 · 接电',ta:[3.3,6.2],d:9,cam:dolly(()=>SL(-17,-24).setY(10),()=>SL(-12,-19).setY(7.5),()=>SL(-3,-10).setY(4),()=>SL(-1.5,-11).setY(3.2))},
  {id:'04',title:'服务车进场',ta:[6.2,12.8],d:10,cam:orbit(SL(0,4),42,24,55,110)},
- {id:'05',title:'配餐车升降',ta:[10.2,12.4],d:9,cam:dolly(()=>SL(-22,24).setY(8),()=>SL(-17,18).setY(6.5),()=>SL(-4.4,10).setY(3.4),()=>SL(-4.4,10).setY(4))},
+ {id:'05',title:'配餐车升降',ta:[10.2,12.4],d:9,cam:dolly(()=>SL(-20,22).setY(7),()=>SL(-16,17).setY(6),()=>SL(-5,7.7).setY(2.8),()=>SL(-4.5,7.7).setY(3.4))},
  {id:'06',title:'加油 · 装卸行李',ta:[12.8,19],d:10,cam:dolly(()=>SL(26,20).setY(7),()=>SL(23,6).setY(6),()=>SL(5,5).setY(1.6),()=>SL(6,2).setY(1.6))},
  {id:'07',title:'登机',ta:[21,35],d:9,cam:orbit(SL(0,2),48,32,20,70)},
  {id:'08',title:'撤桥 · 推出',ta:[35.3,41],d:10,cam:dolly(()=>SL(-26,-24).setY(15),()=>SL(-30,14).setY(14),()=>PP().setY(2),()=>PP().setY(2))},

@@ -15,8 +15,16 @@ window.__probe=(samples)=>{const out=[];const ray=new THREE.Raycaster();ray.far=
     for(const u in bad)out.push({t,veh:(g.userData.vname||g.children.find(c=>c.userData&&c.userData.name)?.userData.name),hit:nameOf(u),pts:bad[u],of:pts.length});};
   const others=[];[planes[0],planes[2]].forEach(p=>p.g.traverse(o=>{if(o.isMesh&&!o.material.isMeshBasicMaterial)others.push({o,who:p.name});}));
   const planeCheck=(t)=>{if(!P2.g.visible)return;const pts=vtx(P2.g);const all=others.concat(vsolids(null)).concat(solids.filter(x=>x.who.indexOf('客机')<0));solidsAll=all;const bad={};pts.forEach(pt=>inside(pt,all).forEach(u=>{bad[u]=(bad[u]||0)+1;}));for(const u in bad)out.push({t,veh:'中间客机',hit:nameOf(u),pts:bad[u],of:pts.length});};
-  for(const t of samples){TA.t=t;TA.play=false;taUpdate(0);scene.updateMatrixWorld(true);movers.forEach(g=>check(g,t));if(t>=37)for(const x of [-80,-40,0,40,80]){train.position.x=x;scene.updateMatrixWorld(true);planeCheck(t+'@train'+x);}}
+  // reverse direction: thin parts (tailplane, wingtips, hoses) can slice through a vehicle without any vehicle vertex ending up inside them
+  const B=new THREE.Box3(),PB=new THREE.Box3();
+  const rev=(g,t)=>{if(!vis(g))return;B.setFromObject(g).expandByScalar(.05);const gs=[];g.traverse(o=>{if(o.isMesh&&!o.material.isMeshBasicMaterial&&!o.isInstancedMesh)gs.push({o,who:'车辆'});});if(!gs.length)return;
+    const vname=(g.children.find(c=>c.userData&&c.userData.name)||{userData:{}}).userData.name;
+    planes.forEach(pl=>{if(!pl.g.visible)return;PB.setFromObject(pl.g);if(!PB.intersectsBox(B))return;pl.g.updateMatrixWorld(true);
+      pl.g.traverse(o=>{if(!o.isMesh||o.material.isMeshBasicMaterial)return;const p=o.geometry.attributes.position;let n=0;
+        for(let i=0;i<p.count;i++){const v=new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);if(!B.containsPoint(v))continue;if(inside(v,gs).length)n++;}
+        if(n)out.push({t,veh:vname,hit:pl.name+' / '+o.userData.name+'（反向）',pts:n,of:p.count});});});};
+  for(const t of samples){TA.t=t;TA.play=false;taUpdate(0);scene.updateMatrixWorld(true);movers.forEach(g=>{check(g,t);rev(g,t);});if(t>=37)for(const x of [-80,-40,0,40,80]){train.position.x=x;scene.updateMatrixWorld(true);planeCheck(t+'@train'+x);}}
 
-  if(samples.length===0){TA.t=14;taUpdate(0);scene.updateMatrixWorld(true);statics.forEach(g=>check(g,'static'));
+  if(samples.length===0){TA.t=14;taUpdate(0);scene.updateMatrixWorld(true);statics.forEach(g=>{check(g,'static');rev(g,'static');});
     for(let x=-80;x<=80;x+=4){train.position.x=x;scene.updateMatrixWorld(true);train.children.forEach(c=>check(c,'train@'+x));}}
   return out;};
